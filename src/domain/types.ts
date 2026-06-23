@@ -90,3 +90,25 @@ export interface Notification {
   createdAt: string;
   read: boolean;
 }
+
+export interface ExtractedPaymentDetails {
+  amount: number;
+  transactionDate: string;
+  transactionNumber: string;
+  senderName: string;
+  recipientName: string;
+}
+
+export interface PaymentProofValidation {
+  valid: boolean;
+  reasons: string[];
+}
+
+export interface PaymentProof {
+  id: string;
+  participantId: string;
+  fileName: string;
+  uploadedAt: string;
+  extracted: ExtractedPaymentDetails;
+  validation: PaymentProofValidation;
+}

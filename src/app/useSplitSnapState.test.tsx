@@ -31,4 +31,29 @@ describe("useSplitSnapState", () => {
     ).toBe(true);
     expect(result.current.statuses.nico).toBe("reminded");
   });
+
+  it("auto-marks a participant paid after valid proof upload", () => {
+    const { result } = renderHook(() => useSplitSnapState());
+
+    act(() => {
+      result.current.submitPaymentProof("nico", "gcash-valid-nico.jpg");
+    });
+
+    expect(result.current.statuses.nico).toBe("paid");
+    expect(result.current.paymentProofs.nico.validation.valid).toBe(true);
+  });
+
+  it("keeps a participant unpaid after invalid proof upload", () => {
+    const { result } = renderHook(() => useSplitSnapState());
+
+    act(() => {
+      result.current.submitPaymentProof("nico", "gcash-wrong-amount-nico.jpg");
+    });
+
+    expect(result.current.statuses.nico).toBeUndefined();
+    expect(result.current.paymentProofs.nico.validation.valid).toBe(false);
+    expect(result.current.paymentProofs.nico.validation.reasons[0]).toMatch(
+      /^Amount must match PHP .* within PHP 1\.00\.$/
+    );
+  });
 });

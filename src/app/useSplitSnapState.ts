@@ -4,17 +4,32 @@ import {
   createExpenseNotifications,
   createReminderNotification
 } from "../domain/notificationService";
+import {
+  extractPaymentDetailsFromUpload,
+  validatePaymentProof
+} from "../domain/paymentProofService";
 import { updateReliabilityAfterPayment } from "../domain/reliability";
 import { calculateSplit } from "../domain/splitCalculator";
-import type { Friend, Notification, PaymentStatus, Receipt } from "../domain/types";
+import type { Friend, Notification, PaymentProof, PaymentStatus, Receipt } from "../domain/types";
 
 const expenseId = "saturday-dinner-2026-06-20";
+type ActiveRole = "unset" | "payer" | "participant";
 
 export function useSplitSnapState() {
   const [friends, setFriends] = useState<Friend[]>(mockFriends);
   const [receipt, setReceipt] = useState<Receipt>(demoReceipt);
+  const [activeRole, setActiveRole] = useState<ActiveRole>("unset");
+  const [activeParticipantId, setActiveParticipantId] = useState("nico");
+  const [paymentProofs, setPaymentProofs] = useState<Record<string, PaymentProof>>({});
   const [statuses, setStatuses] = useState<Record<string, PaymentStatus>>({});
   const split = useMemo(() => calculateSplit(receipt, demoGroup, statuses), [receipt, statuses]);
+  const usedTransactionNumbers = useMemo(
+    () =>
+      Object.values(paymentProofs)
+        .filter((proof) => proof.validation.valid)
+        .map((proof) => proof.extracted.transactionNumber),
+    [paymentProofs]
+  );
   const [notifications, setNotifications] = useState<Notification[]>(() =>
     createExpenseNotifications({
       expenseId,
@@ -92,6 +107,55 @@ export function useSplitSnapState() {
     );
   }
 
+  function submitPaymentProof(participantId: string, fileName: string) {
+    const result = split.results.find((item) => item.participantId === participantId);
+    const friend = friends.find((item) => item.id === participantId);
+    if (!result || !friend) {
+      return;
+    }
+
+    const extracted = extractPaymentDetailsFromUpload({
+      fileName,
+      participantName: friend.name,
+      expectedAmount: result.totalOwed,
+      payerName: "Maya",
+      dinnerDate: receipt.date
+    });
+    const validation = validatePaymentProof(extracted, {
+      participantId,
+      expectedAmount: result.totalOwed,
+      dinnerDate: receipt.date,
+      payerName: "Maya",
+      usedTransactionNumbers
+    });
+    const proof: PaymentProof = {
+      id: `${participantId}-${Date.now()}`,
+      participantId,
+      fileName,
+      uploadedAt: new Date().toISOString(),
+      extracted,
+      validation
+    };
+
+    setPaymentProofs((current) => ({ ...current, [participantId]: proof }));
+
+    if (validation.valid) {
+      setStatuses((current) => ({ ...current, [participantId]: "paid" }));
+      setFriends((current) =>
+        current.map((item) =>
+          item.id === participantId
+            ? updateReliabilityAfterPayment(item, {
+                expenseId,
+                paidAtDaysFromDue: 0,
+                remindersSent: statuses[participantId] === "reminded" ? 1 : 0,
+                amountPaid: result.totalOwed
+              })
+            : item
+        )
+      );
+    }
+  }
+
   function simulateUpload(fileName: string) {
     setReceipt((current) => ({
       ...current,
@@ -108,10 +172,16 @@ export function useSplitSnapState() {
     split,
     notifications,
     statuses,
+    activeRole,
+    activeParticipantId,
+    paymentProofs,
+    setActiveRole,
+    setActiveParticipantId,
     toggleItemParticipant,
     updateItemPrice,
     sendReminder,
     markPaid,
+    submitPaymentProof,
     simulateUpload
   };
 }
