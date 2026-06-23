@@ -117,6 +117,7 @@ export function calculateSplit(
     const largestDebtor = results.reduce((largest, current) =>
       current.totalOwed > largest.totalOwed ? current : largest
     );
+    largestDebtor.serviceShare = roundMoney(largestDebtor.serviceShare + remainder);
     largestDebtor.totalOwed = roundMoney(largestDebtor.totalOwed + remainder);
   }
 

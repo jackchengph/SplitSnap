@@ -54,8 +54,12 @@ describe("calculateSplit", () => {
     const a = summary.results.find((result) => result.participantId === "a");
 
     expect(a?.taxShare).toBeCloseTo(22, 2);
-    expect(a?.serviceShare).toBeCloseTo(7.33, 2);
+    expect(a?.serviceShare).toBeCloseTo(7.34, 2);
     expect(a?.totalOwed).toBeCloseTo(249.34, 2);
+    expect((a?.subtotal ?? 0) + (a?.taxShare ?? 0) + (a?.serviceShare ?? 0)).toBeCloseTo(
+      a?.totalOwed ?? 0,
+      2
+    );
     expect(
       summary.results.reduce((total, result) => total + result.totalOwed, 0)
     ).toBeCloseTo(340, 2);

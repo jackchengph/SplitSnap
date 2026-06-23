@@ -19,6 +19,16 @@ describe("App", () => {
     expect(screen.getByText(/Friendly payment reminder/i)).toBeInTheDocument();
   });
 
+  it("disables reminders after a participant is marked paid", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getAllByRole("button", { name: /mark paid/i })[0]);
+
+    expect(screen.getByText("paid")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /remind/i })[0]).toBeDisabled();
+  });
+
   it("shows YOLO fallback guidance after uploading a receipt image", async () => {
     const user = userEvent.setup();
     render(<App />);

@@ -309,6 +309,11 @@ ul {
   color: #315b53;
 }
 
+.button-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .notification-card {
   background: #fbfdfc;
 }

@@ -10,7 +10,9 @@ interface SettlementPanelProps {
 
 export function SettlementPanel({ friends, split, onReminder, onMarkPaid }: SettlementPanelProps) {
   const friendById = new Map(friends.map((friend) => [friend.id, friend]));
-  const friendsOwe = split.results.reduce((total, result) => total + result.totalOwed, 0);
+  const friendsOwe = split.results
+    .filter((result) => result.status !== "paid")
+    .reduce((total, result) => total + result.totalOwed, 0);
 
   return (
     <section className="panel settlement-panel">
@@ -53,7 +55,11 @@ export function SettlementPanel({ friends, split, onReminder, onMarkPaid }: Sett
                 </ul>
               </details>
               <div className="button-row">
-                <button type="button" onClick={() => onReminder(result.participantId)}>
+                <button
+                  type="button"
+                  disabled={result.status === "paid"}
+                  onClick={() => onReminder(result.participantId)}
+                >
                   Remind
                 </button>
                 <button type="button" className="secondary" onClick={() => onMarkPaid(result.participantId)}>
