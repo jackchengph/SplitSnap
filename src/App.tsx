@@ -1,10 +1,13 @@
 import { useSplitSnapState } from "./app/useSplitSnapState";
+import { FriendsExplorer } from "./components/FriendsExplorer";
 import { GroupPanel } from "./components/GroupPanel";
+import { GroupSetup } from "./components/GroupSetup";
 import { ItemAssignment } from "./components/ItemAssignment";
 import { NotificationCenter } from "./components/NotificationCenter";
 import { ParticipantDashboard } from "./components/ParticipantDashboard";
 import { PaymentProofStatus } from "./components/PaymentProofStatus";
 import { ReceiptCapture } from "./components/ReceiptCapture";
+import { ReceiptScanner } from "./components/ReceiptScanner";
 import { RoleChooser } from "./components/RoleChooser";
 import { SettlementPanel } from "./components/SettlementPanel";
 import { formatCurrency } from "./domain/format";
@@ -38,6 +41,42 @@ export default function App() {
     );
   }
 
+  if (state.payerStep === "friends") {
+    return (
+      <FriendsExplorer
+        friends={state.friends}
+        connectedFriendIds={state.connectedFriendIds}
+        onConnect={state.connectFriend}
+        onNext={state.goToGroupSetup}
+        onBack={() => state.setActiveRole("unset")}
+      />
+    );
+  }
+
+  if (state.payerStep === "group") {
+    return (
+      <GroupSetup
+        friends={state.friends}
+        connectedFriendIds={state.connectedFriendIds}
+        selectedDinnerFriendIds={state.selectedDinnerFriendIds}
+        onToggleFriend={state.toggleDinnerFriend}
+        onNext={state.goToScanner}
+        onBack={() => state.setPayerStep("friends")}
+      />
+    );
+  }
+
+  if (state.payerStep === "scanner" || state.payerStep === "parsing") {
+    return (
+      <ReceiptScanner
+        parseStatus={state.parseStatus}
+        parseWarnings={state.parseWarnings}
+        onCapture={state.captureReceipt}
+        onBack={() => state.setPayerStep("group")}
+      />
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -65,6 +104,7 @@ export default function App() {
             group={state.group}
             onToggleParticipant={state.toggleItemParticipant}
             onUpdatePrice={state.updateItemPrice}
+            onUpdateName={state.updateItemName}
           />
         </div>
         <aside className="summary-column">

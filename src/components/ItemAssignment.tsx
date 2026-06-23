@@ -7,6 +7,7 @@ interface ItemAssignmentProps {
   group: DinnerGroup;
   onToggleParticipant: (itemId: string, participantId: string) => void;
   onUpdatePrice: (itemId: string, price: number) => void;
+  onUpdateName: (itemId: string, name: string) => void;
 }
 
 export function ItemAssignment({
@@ -14,7 +15,8 @@ export function ItemAssignment({
   friends,
   group,
   onToggleParticipant,
-  onUpdatePrice
+  onUpdatePrice,
+  onUpdateName
 }: ItemAssignmentProps) {
   const participants = friends.filter((friend) => group.participantIds.includes(friend.id));
 
@@ -29,10 +31,29 @@ export function ItemAssignment({
           <article className="item-card" key={item.id}>
             <div className="item-topline">
               <div>
-                <strong>{item.name}</strong>
+                <label className="item-name-input">
+                  Item
+                  <input
+                    type="text"
+                    value={item.name}
+                    onChange={(event) => onUpdateName(item.id, event.target.value)}
+                  />
+                </label>
                 <p>
                   Qty {item.quantity} · confidence {Math.round(item.confidence * 100)}%
                 </p>
+                <div className="tag-row">
+                  {item.parseSource ? (
+                    <span className={item.needsReview ? "tag warning-tag" : "tag"}>
+                      {item.parseSource === "yolo"
+                        ? "YOLO fallback"
+                        : item.parseSource === "manual"
+                          ? "Manual review"
+                          : "OCR"}
+                    </span>
+                  ) : null}
+                  {item.needsReview ? <span className="tag warning-tag">Check price/name</span> : null}
+                </div>
               </div>
               <label className="price-input">
                 Price

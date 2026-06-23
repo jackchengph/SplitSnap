@@ -1,4 +1,13 @@
 export type PaymentStatus = "unpaid" | "reminded" | "paid";
+export type ReceiptParseSource = "ocr" | "yolo" | "manual";
+export type PayerStep = "friends" | "group" | "scanner" | "parsing" | "review";
+export type ParseStatus =
+  | "Idle"
+  | "Scanning receipt"
+  | "OCR reading items"
+  | "Checking unclear areas"
+  | "Needs manual review"
+  | "Ready to split";
 
 export type ReliabilityTag =
   | "Pays on time"
@@ -37,6 +46,8 @@ export interface ReceiptItem {
   price: number;
   assignedParticipantIds: string[];
   confidence: number;
+  parseSource?: ReceiptParseSource;
+  needsReview?: boolean;
 }
 
 export interface Receipt {
@@ -45,7 +56,9 @@ export interface Receipt {
   date: string;
   imageUrl: string;
   ocrConfidence: number;
-  parserMode: "sample" | "simulated-upload";
+  parserMode: "sample" | "simulated-upload" | "camera-ocr-yolo";
+  parseStatus?: ParseStatus;
+  parseWarnings?: string[];
   items: ReceiptItem[];
   tax: number;
   serviceCharge: number;

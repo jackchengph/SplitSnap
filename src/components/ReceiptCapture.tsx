@@ -6,7 +6,8 @@ interface ReceiptCaptureProps {
 }
 
 export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
-  const lowConfidence = receipt.ocrConfidence < 0.75;
+  const lowConfidence =
+    receipt.ocrConfidence < 0.85 || receipt.items.some((item) => item.needsReview);
 
   return (
     <section className="panel">
@@ -15,11 +16,17 @@ export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
         <h2>{receipt.merchantName}</h2>
       </div>
       <div className="receipt-preview" aria-label="Receipt preview">
+        {receipt.imageUrl ? (
+          <img src={receipt.imageUrl} alt="Captured receipt" />
+        ) : null}
         <div>
           <strong>{receipt.merchantName}</strong>
           <span>{receipt.date}</span>
         </div>
-        <p>{receipt.items.length} parsed items</p>
+        <p>
+          {receipt.items.length} parsed items
+          {receipt.parseStatus ? ` · ${receipt.parseStatus}` : ""}
+        </p>
       </div>
       <label className="upload-control">
         Upload receipt image
@@ -40,6 +47,11 @@ export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
           ? " SplitSnap would retry with layout detection and a YOLO-style fallback before asking you to correct items."
           : " Simulated OCR looks usable, and you can still correct every item."}
       </div>
+      {receipt.parseWarnings?.map((warning) => (
+        <div className="notice warning" key={warning}>
+          {warning}
+        </div>
+      ))}
     </section>
   );
 }

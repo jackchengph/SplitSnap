@@ -9,20 +9,50 @@ import {
   validatePaymentProof
 } from "../domain/paymentProofService";
 import { updateReliabilityAfterPayment } from "../domain/reliability";
+import { parseCapturedReceipt } from "../domain/receiptParsingService";
 import { calculateSplit } from "../domain/splitCalculator";
-import type { Friend, Notification, PaymentProof, PaymentStatus, Receipt } from "../domain/types";
+import type {
+  DinnerGroup,
+  Friend,
+  Notification,
+  ParseStatus,
+  PayerStep,
+  PaymentProof,
+  PaymentStatus,
+  Receipt
+} from "../domain/types";
 
 const expenseId = "saturday-dinner-2026-06-20";
 type ActiveRole = "unset" | "payer" | "participant";
+const payerId = "maya";
+const initialConnectedFriendIds = ["nico", "bea"];
+
+function buildGroup(participantIds: string[]): DinnerGroup {
+  return {
+    ...demoGroup,
+    participantIds
+  };
+}
 
 export function useSplitSnapState() {
   const [friends, setFriends] = useState<Friend[]>(mockFriends);
   const [receipt, setReceipt] = useState<Receipt>(demoReceipt);
   const [activeRole, setActiveRole] = useState<ActiveRole>("unset");
+  const [payerStep, setPayerStep] = useState<PayerStep>("friends");
+  const [connectedFriendIds, setConnectedFriendIds] = useState<string[]>(initialConnectedFriendIds);
+  const [selectedDinnerFriendIds, setSelectedDinnerFriendIds] = useState<string[]>([]);
+  const [capturedReceiptImageUrl, setCapturedReceiptImageUrl] = useState("");
+  const [parseStatus, setParseStatus] = useState<ParseStatus>("Idle");
+  const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [activeParticipantId, setActiveParticipantId] = useState("nico");
   const [paymentProofs, setPaymentProofs] = useState<Record<string, PaymentProof>>({});
   const [statuses, setStatuses] = useState<Record<string, PaymentStatus>>({});
-  const split = useMemo(() => calculateSplit(receipt, demoGroup, statuses), [receipt, statuses]);
+  const activeGroup = useMemo(() => {
+    const dinnerFriendIds =
+      selectedDinnerFriendIds.length > 0 ? selectedDinnerFriendIds : connectedFriendIds;
+    return buildGroup([payerId, ...dinnerFriendIds]);
+  }, [connectedFriendIds, selectedDinnerFriendIds]);
+  const split = useMemo(() => calculateSplit(receipt, activeGroup, statuses), [activeGroup, receipt, statuses]);
   const usedTransactionNumbers = useMemo(
     () =>
       Object.values(paymentProofs)
@@ -35,10 +65,62 @@ export function useSplitSnapState() {
       expenseId,
       payerName: "Maya",
       dinnerName: demoGroup.name,
-      results: calculateSplit(demoReceipt, demoGroup).results,
+      results: calculateSplit(
+        demoReceipt,
+        buildGroup([payerId, ...initialConnectedFriendIds])
+      ).results,
       createdAt: new Date().toISOString()
     })
   );
+
+  function connectFriend(friendId: string) {
+    setConnectedFriendIds((current) =>
+      current.includes(friendId) ? current : [...current, friendId]
+    );
+  }
+
+  function toggleDinnerFriend(friendId: string) {
+    if (!connectedFriendIds.includes(friendId)) {
+      return;
+    }
+
+    setSelectedDinnerFriendIds((current) =>
+      current.includes(friendId)
+        ? current.filter((id) => id !== friendId)
+        : [...current, friendId]
+    );
+  }
+
+  function goToGroupSetup() {
+    setPayerStep("group");
+  }
+
+  function goToScanner() {
+    setPayerStep("scanner");
+  }
+
+  function captureReceipt(imageDataUrl: string) {
+    setPayerStep("parsing");
+    setParseStatus("Scanning receipt");
+    setCapturedReceiptImageUrl(imageDataUrl);
+
+    const participantIds = activeGroup.participantIds;
+    const parsed = parseCapturedReceipt({ imageDataUrl, participantIds });
+
+    setReceipt(parsed.receipt);
+    setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");
+    setParseWarnings(parsed.warnings);
+    setNotifications(
+      createExpenseNotifications({
+        expenseId,
+        payerName: "Maya",
+        dinnerName: activeGroup.name,
+        results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
+        createdAt: new Date().toISOString()
+      })
+    );
+    setPayerStep("review");
+  }
 
   function toggleItemParticipant(itemId: string, participantId: string) {
     setReceipt((current) => ({
@@ -63,7 +145,22 @@ export function useSplitSnapState() {
   function updateItemPrice(itemId: string, price: number) {
     setReceipt((current) => ({
       ...current,
-      items: current.items.map((item) => (item.id === itemId ? { ...item, price } : item))
+      items: current.items.map((item) =>
+        item.id === itemId
+          ? { ...item, price, parseSource: item.parseSource ?? "manual", needsReview: false }
+          : item
+      )
+    }));
+  }
+
+  function updateItemName(itemId: string, name: string) {
+    setReceipt((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.id === itemId
+          ? { ...item, name, parseSource: "manual", needsReview: false }
+          : item
+      )
     }));
   }
 
@@ -161,24 +258,46 @@ export function useSplitSnapState() {
       ...current,
       parserMode: "simulated-upload",
       merchantName: fileName.replace(/\.[^.]+$/, "") || "Uploaded receipt",
-      ocrConfidence: 0.62
+      ocrConfidence: 0.62,
+      parseStatus: "Needs manual review",
+      parseWarnings: ["Uploaded receipt image needs OCR and YOLO-style fallback review."],
+      items: current.items.map((item) =>
+        item.confidence < 0.85
+          ? { ...item, parseSource: "manual", needsReview: true, confidence: Math.min(item.confidence, 0.62) }
+          : item
+      )
     }));
+    setParseStatus("Needs manual review");
+    setParseWarnings(["Uploaded receipt image needs OCR and YOLO-style fallback review."]);
   }
 
   return {
     friends,
-    group: demoGroup,
+    group: activeGroup,
     receipt,
     split,
     notifications,
     statuses,
     activeRole,
+    payerStep,
+    connectedFriendIds,
+    selectedDinnerFriendIds,
+    capturedReceiptImageUrl,
+    parseStatus,
+    parseWarnings,
     activeParticipantId,
     paymentProofs,
     setActiveRole,
+    setPayerStep,
     setActiveParticipantId,
+    connectFriend,
+    toggleDinnerFriend,
+    goToGroupSetup,
+    goToScanner,
+    captureReceipt,
     toggleItemParticipant,
     updateItemPrice,
+    updateItemName,
     sendReminder,
     markPaid,
     submitPaymentProof,
