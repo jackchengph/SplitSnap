@@ -10,12 +10,18 @@ interface SettlementPanelProps {
 
 export function SettlementPanel({ friends, split, onReminder, onMarkPaid }: SettlementPanelProps) {
   const friendById = new Map(friends.map((friend) => [friend.id, friend]));
+  const friendsOwe = split.results.reduce((total, result) => total + result.totalOwed, 0);
 
   return (
     <section className="panel settlement-panel">
       <div className="section-heading">
         <p className="eyebrow">Settle</p>
         <h2>Who owes Maya?</h2>
+      </div>
+      <div className="settlement-summary">
+        <span>Friends owe</span>
+        <strong>{formatCurrency(friendsOwe)}</strong>
+        <span>Maya keeps her own share covered.</span>
       </div>
       {split.warnings.map((warning) => (
         <div className="notice warning" key={warning.type}>

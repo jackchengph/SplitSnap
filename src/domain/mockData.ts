@@ -115,7 +115,7 @@ export const demoReceipt: Receipt = {
       id: "dessert",
       name: "Matcha cheesecake",
       quantity: 2,
-      price: 1040,
+      price: 1020,
       assignedParticipantIds: ["enzo", "lia"],
       confidence: 0.84
     }

@@ -18,4 +18,16 @@ describe("App", () => {
     await user.click(screen.getAllByRole("button", { name: /remind/i })[0]);
     expect(screen.getByText(/Friendly payment reminder/i)).toBeInTheDocument();
   });
+
+  it("shows YOLO fallback guidance after uploading a receipt image", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.upload(
+      screen.getByLabelText(/Upload receipt image/i),
+      new File(["receipt"], "low-confidence-receipt.jpg", { type: "image/jpeg" })
+    );
+
+    expect(screen.getByText(/YOLO-style fallback/i)).toBeInTheDocument();
+  });
 });
