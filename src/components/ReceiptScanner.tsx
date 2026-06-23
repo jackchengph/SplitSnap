@@ -4,8 +4,8 @@ import type { ParseStatus } from "../domain/types";
 interface ReceiptScannerProps {
   parseStatus: ParseStatus;
   parseWarnings: string[];
-  onCapture: (imageDataUrl: string) => void;
-  onBack: () => void;
+  onCapture: (imageDataUrl: string) => void | Promise<void>;
+  onHome: () => void;
 }
 
 function fallbackReceiptImage(): string {
@@ -13,7 +13,7 @@ function fallbackReceiptImage(): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onBack }: ReceiptScannerProps) {
+export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }: ReceiptScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -67,12 +67,12 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onBack }
       const context = canvas.getContext("2d");
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        onCapture(canvas.toDataURL("image/png"));
+        void onCapture(canvas.toDataURL("image/png"));
         return;
       }
     }
 
-    onCapture(fallbackReceiptImage());
+    void onCapture(fallbackReceiptImage());
   }
 
   return (
@@ -82,8 +82,8 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onBack }
           <p className="eyebrow">Camera + OCR</p>
           <h1>Scan receipt</h1>
         </div>
-        <button type="button" className="secondary nav-button" onClick={onBack}>
-          Back to group
+        <button type="button" className="secondary nav-button" onClick={onHome}>
+          Home
         </button>
       </header>
 

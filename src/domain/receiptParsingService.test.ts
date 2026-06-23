@@ -39,8 +39,41 @@ describe("receiptParsingService", () => {
     });
   });
 
-  it("returns a parsed receipt with status history, warning text, and the captured image", () => {
-    const result = parseCapturedReceipt({
+  it("turns high-confidence Tesseract text into parsed receipt items", async () => {
+    const result = await parseCapturedReceipt({
+      imageDataUrl: receiptImage,
+      participantIds: ["maya", "nico"],
+      ocrAttempt: {
+        engine: "tesseract",
+        confidence: 0.91,
+        text: ["Cafe Luna", "Americano 120.00", "Croissant 180.00", "TOTAL 300.00"].join("\n")
+      }
+    });
+
+    expect(result.receipt.merchantName).toBe("Cafe Luna");
+    expect(result.receipt.items.map((item) => item.name)).toEqual(["Americano", "Croissant"]);
+    expect(result.receipt.total).toBe(300);
+    expect(result.receipt.items.every((item) => item.parseSource === "ocr")).toBe(true);
+  });
+
+  it("falls back to YOLO/manual review when Tesseract confidence is low", async () => {
+    const result = await parseCapturedReceipt({
+      imageDataUrl: receiptImage,
+      participantIds: ["maya", "nico"],
+      ocrAttempt: {
+        engine: "tesseract",
+        confidence: 0.23,
+        text: "blurry words maybe 12 ??"
+      }
+    });
+
+    expect(result.receipt.items.some((item) => item.parseSource === "yolo")).toBe(true);
+    expect(result.receipt.items.some((item) => item.parseSource === "manual")).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("Tesseract OCR confidence was low"))).toBe(true);
+  });
+
+  it("returns a parsed receipt with status history, warning text, and the captured image", async () => {
+    const result = await parseCapturedReceipt({
       imageDataUrl: receiptImage,
       participantIds: ["maya", "nico", "bea"]
     });

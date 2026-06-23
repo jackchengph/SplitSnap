@@ -5,6 +5,7 @@ import { GroupSetup } from "./components/GroupSetup";
 import { ItemAssignment } from "./components/ItemAssignment";
 import { NotificationCenter } from "./components/NotificationCenter";
 import { ParticipantDashboard } from "./components/ParticipantDashboard";
+import { PayerHome } from "./components/PayerHome";
 import { PaymentProofStatus } from "./components/PaymentProofStatus";
 import { ReceiptCapture } from "./components/ReceiptCapture";
 import { ReceiptScanner } from "./components/ReceiptScanner";
@@ -41,6 +42,20 @@ export default function App() {
     );
   }
 
+  if (state.payerStep === "home") {
+    return (
+      <PayerHome
+        friends={state.friends}
+        connectedFriendIds={state.connectedFriendIds}
+        selectedDinnerFriendIds={state.selectedDinnerFriendIds}
+        currentReceiptTotal={state.receipt.total}
+        onConnectFriends={() => state.setPayerStep("friends")}
+        onStartSplit={state.goToGroupSetup}
+        onBack={() => state.setActiveRole("unset")}
+      />
+    );
+  }
+
   if (state.payerStep === "friends") {
     return (
       <FriendsExplorer
@@ -48,7 +63,7 @@ export default function App() {
         connectedFriendIds={state.connectedFriendIds}
         onConnect={state.connectFriend}
         onNext={state.goToGroupSetup}
-        onBack={() => state.setActiveRole("unset")}
+        onHome={() => state.setPayerStep("home")}
       />
     );
   }
@@ -61,7 +76,7 @@ export default function App() {
         selectedDinnerFriendIds={state.selectedDinnerFriendIds}
         onToggleFriend={state.toggleDinnerFriend}
         onNext={state.goToScanner}
-        onBack={() => state.setPayerStep("friends")}
+        onHome={() => state.setPayerStep("home")}
       />
     );
   }
@@ -72,7 +87,7 @@ export default function App() {
         parseStatus={state.parseStatus}
         parseWarnings={state.parseWarnings}
         onCapture={state.captureReceipt}
-        onBack={() => state.setPayerStep("group")}
+        onHome={() => state.setPayerStep("home")}
       />
     );
   }
@@ -89,8 +104,8 @@ export default function App() {
             <span>Total receipt</span>
             <strong>{formatCurrency(state.receipt.total)}</strong>
           </div>
-          <button type="button" className="secondary nav-button" onClick={() => state.setActiveRole("unset")}>
-            Change role
+          <button type="button" className="secondary nav-button" onClick={() => state.setPayerStep("home")}>
+            Home
           </button>
         </div>
       </header>

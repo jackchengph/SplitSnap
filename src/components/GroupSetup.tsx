@@ -6,7 +6,7 @@ interface GroupSetupProps {
   selectedDinnerFriendIds: string[];
   onToggleFriend: (friendId: string) => void;
   onNext: () => void;
-  onBack: () => void;
+  onHome: () => void;
 }
 
 export function GroupSetup({
@@ -15,7 +15,7 @@ export function GroupSetup({
   selectedDinnerFriendIds,
   onToggleFriend,
   onNext,
-  onBack
+  onHome
 }: GroupSetupProps) {
   const connectedFriends = friends.filter((friend) => connectedFriendIds.includes(friend.id));
 
@@ -26,8 +26,8 @@ export function GroupSetup({
           <p className="eyebrow">Group setup</p>
           <h1>Who ate with you?</h1>
         </div>
-        <button type="button" className="secondary nav-button" onClick={onBack}>
-          Back to friends
+        <button type="button" className="secondary nav-button" onClick={onHome}>
+          Home
         </button>
       </header>
 

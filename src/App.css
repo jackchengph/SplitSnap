@@ -121,6 +121,37 @@ h2 {
   margin: 0 auto;
 }
 
+.home-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  margin: 0 auto;
+  max-width: 980px;
+}
+
+.home-hero-panel {
+  align-content: center;
+  display: grid;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.home-actions button {
+  background: #124c43;
+  color: #ffffff;
+  padding: 11px 14px;
+}
+
+.home-actions .secondary {
+  background: #eef4f2;
+  color: #315b53;
+}
+
 .workflow-column,
 .summary-column {
   display: grid;
@@ -705,7 +736,8 @@ ul {
 
   .dashboard-grid,
   .participant-grid,
-  .setup-grid {
+  .setup-grid,
+  .home-grid {
     grid-template-columns: 1fr;
   }
 

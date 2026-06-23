@@ -5,7 +5,7 @@ interface FriendsExplorerProps {
   connectedFriendIds: string[];
   onConnect: (friendId: string) => void;
   onNext: () => void;
-  onBack: () => void;
+  onHome: () => void;
 }
 
 export function FriendsExplorer({
@@ -13,7 +13,7 @@ export function FriendsExplorer({
   connectedFriendIds,
   onConnect,
   onNext,
-  onBack
+  onHome
 }: FriendsExplorerProps) {
   const people = friends.filter((friend) => friend.id !== "maya");
   const connected = people.filter((friend) => connectedFriendIds.includes(friend.id));
@@ -26,8 +26,8 @@ export function FriendsExplorer({
           <p className="eyebrow">Friends</p>
           <h1>Find dinner friends</h1>
         </div>
-        <button type="button" className="secondary nav-button" onClick={onBack}>
-          Change role
+        <button type="button" className="secondary nav-button" onClick={onHome}>
+          Home
         </button>
       </header>
 

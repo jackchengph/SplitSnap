@@ -5,11 +5,14 @@ import App from "./App";
 
 async function completePayerScanFlow(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /I paid the bill/i }));
+  await user.click(screen.getByRole("button", { name: /Connect friends/i }));
   await user.click(screen.getByRole("button", { name: /Connect with Enzo/i }));
+  await user.click(screen.getByRole("button", { name: /Home/i }));
   await user.click(screen.getByRole("button", { name: /Start group split/i }));
   await user.click(screen.getByLabelText(/Nico/i));
   await user.click(screen.getByRole("button", { name: /Next: scan receipt/i }));
   await user.click(screen.getByRole("button", { name: /Capture receipt/i }));
+  await screen.findByRole("heading", { name: /SplitSnap/i });
 }
 
 describe("App", () => {
@@ -26,19 +29,35 @@ describe("App", () => {
     render(<App />);
     await user.click(screen.getByRole("button", { name: /I paid the bill/i }));
 
+    expect(screen.getByRole("heading", { name: /SplitSnap home/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Connect friends/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start group split/i })).toBeInTheDocument();
+  });
+
+  it("keeps friend connecting on a separate page and returns home", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /I paid the bill/i }));
+    await user.click(screen.getByRole("button", { name: /Connect friends/i }));
+
     expect(screen.getByRole("heading", { name: /Find dinner friends/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Connect with Enzo/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Home/i }));
+    expect(screen.getByRole("heading", { name: /SplitSnap home/i })).toBeInTheDocument();
   });
 
   it("guides the payer from friends to group setup to the camera scanner", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /I paid the bill/i }));
-
-    await user.click(screen.getByRole("button", { name: /Connect with Enzo/i }));
     await user.click(screen.getByRole("button", { name: /Start group split/i }));
 
     expect(screen.getByRole("heading", { name: /Who ate with you/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Home/i }));
+    expect(screen.getByRole("heading", { name: /SplitSnap home/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Start group split/i }));
+
     await user.click(screen.getByLabelText(/Nico/i));
     await user.click(screen.getByRole("button", { name: /Next: scan receipt/i }));
 

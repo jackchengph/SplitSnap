@@ -1,6 +1,6 @@
 export type PaymentStatus = "unpaid" | "reminded" | "paid";
 export type ReceiptParseSource = "ocr" | "yolo" | "manual";
-export type PayerStep = "friends" | "group" | "scanner" | "parsing" | "review";
+export type PayerStep = "home" | "friends" | "group" | "scanner" | "parsing" | "review";
 export type ParseStatus =
   | "Idle"
   | "Scanning receipt"

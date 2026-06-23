@@ -38,7 +38,7 @@ export function useSplitSnapState() {
   const [friends, setFriends] = useState<Friend[]>(mockFriends);
   const [receipt, setReceipt] = useState<Receipt>(demoReceipt);
   const [activeRole, setActiveRole] = useState<ActiveRole>("unset");
-  const [payerStep, setPayerStep] = useState<PayerStep>("friends");
+  const [payerStep, setPayerStep] = useState<PayerStep>("home");
   const [connectedFriendIds, setConnectedFriendIds] = useState<string[]>(initialConnectedFriendIds);
   const [selectedDinnerFriendIds, setSelectedDinnerFriendIds] = useState<string[]>([]);
   const [capturedReceiptImageUrl, setCapturedReceiptImageUrl] = useState("");
@@ -99,13 +99,13 @@ export function useSplitSnapState() {
     setPayerStep("scanner");
   }
 
-  function captureReceipt(imageDataUrl: string) {
+  async function captureReceipt(imageDataUrl: string) {
     setPayerStep("parsing");
     setParseStatus("Scanning receipt");
     setCapturedReceiptImageUrl(imageDataUrl);
 
     const participantIds = activeGroup.participantIds;
-    const parsed = parseCapturedReceipt({ imageDataUrl, participantIds });
+    const parsed = await parseCapturedReceipt({ imageDataUrl, participantIds });
 
     setReceipt(parsed.receipt);
     setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");

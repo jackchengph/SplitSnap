@@ -47,12 +47,15 @@ describe("useSplitSnapState", () => {
     expect(result.current.split.results.map((split) => split.participantId)).toEqual(["nico", "enzo"]);
   });
 
-  it("stores a captured receipt image, parses it, and moves to review", () => {
+  it("stores a captured receipt image, parses it, and moves to review", async () => {
     const { result } = renderHook(() => useSplitSnapState());
 
     act(() => {
       result.current.toggleDinnerFriend("nico");
-      result.current.captureReceipt("data:image/png;base64,scan");
+    });
+
+    await act(async () => {
+      await result.current.captureReceipt("data:image/png;base64,scan");
     });
 
     expect(result.current.payerStep).toBe("review");
