@@ -14,6 +14,72 @@ body {
   margin: 0;
 }
 
+.session-bar {
+  align-items: center;
+  background: #e8f3ef;
+  border-bottom: 1px solid #c7ddd6;
+  color: #315b53;
+  display: flex;
+  font-size: 0.82rem;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 8px 24px;
+}
+
+.session-bar.local {
+  background: #fff8e8;
+  border-color: #ecd492;
+  color: #74550b;
+}
+
+.session-bar button {
+  background: transparent;
+  color: inherit;
+  padding: 4px 8px;
+}
+
+.session-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.auth-shell,
+.loading-shell {
+  align-items: center;
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.auth-panel {
+  background: #ffffff;
+  border: 1px solid #dce8e4;
+  border-radius: 8px;
+  margin: 0 auto;
+  max-width: 440px;
+  padding: 28px;
+}
+
+.auth-panel h1 {
+  margin-bottom: 16px;
+}
+
+.google-sign-in {
+  background: #124c43;
+  color: #ffffff;
+  margin-top: 12px;
+  padding: 12px 16px;
+  width: 100%;
+}
+
+.loading-shell {
+  justify-content: center;
+}
+
 button,
 input,
 select {

@@ -3,6 +3,37 @@ import { describe, expect, it } from "vitest";
 import { useSplitSnapState } from "./useSplitSnapState";
 
 describe("useSplitSnapState", () => {
+  function createStorage(): Storage {
+    const values = new Map<string, string>();
+    return {
+      get length() {
+        return values.size;
+      },
+      clear: () => values.clear(),
+      getItem: (key) => values.get(key) ?? null,
+      key: (index) => [...values.keys()][index] ?? null,
+      removeItem: (key) => {
+        values.delete(key);
+      },
+      setItem: (key, value) => {
+        values.set(key, value);
+      }
+    };
+  }
+
+  it("restores a saved local workspace on the next app session", () => {
+    const storage = createStorage();
+    const first = renderHook(() => useSplitSnapState({ storage }));
+
+    act(() => {
+      first.result.current.connectFriend("enzo");
+    });
+    first.unmount();
+
+    const second = renderHook(() => useSplitSnapState({ storage }));
+    expect(second.result.current.connectedFriendIds).toContain("enzo");
+  });
+
   it("recalculates balances when an item assignment changes", () => {
     const { result } = renderHook(() => useSplitSnapState());
     const before = result.current.split.results.find(

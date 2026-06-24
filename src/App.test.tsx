@@ -16,6 +16,13 @@ async function completePayerScanFlow(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("App", () => {
+  it("clearly labels the unconfigured development fallback as local-only", () => {
+    render(<App />);
+
+    expect(screen.getByText(/Local-only mode/i)).toBeInTheDocument();
+    expect(screen.getByText(/Local user/i)).toBeInTheDocument();
+  });
+
   it("asks for the user's role before showing a dashboard", () => {
     render(<App />);
 

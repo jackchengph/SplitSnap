@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { demoGroup, demoReceipt, mockFriends } from "../domain/mockData";
 import {
   createExpenseNotifications,
@@ -11,6 +11,7 @@ import {
 import { updateReliabilityAfterPayment } from "../domain/reliability";
 import { parseCapturedReceipt } from "../domain/receiptParsingService";
 import { calculateSplit } from "../domain/splitCalculator";
+import { loadLocalWorkspace, saveLocalWorkspace } from "../services/localWorkspace";
 import type {
   DinnerGroup,
   Friend,
@@ -26,6 +27,24 @@ const expenseId = "saturday-dinner-2026-06-20";
 type ActiveRole = "unset" | "payer" | "participant";
 const payerId = "maya";
 const initialConnectedFriendIds = ["nico", "bea"];
+const workspaceStorageKey = "splitsnap.workspace.v1";
+
+interface StoredWorkspace {
+  friends: Friend[];
+  receipt: Receipt;
+  activeRole: ActiveRole;
+  payerStep: PayerStep;
+  connectedFriendIds: string[];
+  selectedDinnerFriendIds: string[];
+  activeParticipantId: string;
+  paymentProofs: Record<string, PaymentProof>;
+  statuses: Record<string, PaymentStatus>;
+  notifications: Notification[];
+}
+
+interface SplitSnapStateOptions {
+  storage?: Storage;
+}
 
 function buildGroup(participantIds: string[]): DinnerGroup {
   return {
@@ -34,19 +53,61 @@ function buildGroup(participantIds: string[]): DinnerGroup {
   };
 }
 
-export function useSplitSnapState() {
-  const [friends, setFriends] = useState<Friend[]>(mockFriends);
-  const [receipt, setReceipt] = useState<Receipt>(demoReceipt);
-  const [activeRole, setActiveRole] = useState<ActiveRole>("unset");
-  const [payerStep, setPayerStep] = useState<PayerStep>("home");
-  const [connectedFriendIds, setConnectedFriendIds] = useState<string[]>(initialConnectedFriendIds);
-  const [selectedDinnerFriendIds, setSelectedDinnerFriendIds] = useState<string[]>([]);
+export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
+  const defaultNotifications = useMemo(
+    () =>
+      createExpenseNotifications({
+        expenseId,
+        payerName: "Maya",
+        dinnerName: demoGroup.name,
+        results: calculateSplit(
+          demoReceipt,
+          buildGroup([payerId, ...initialConnectedFriendIds])
+        ).results,
+        createdAt: new Date().toISOString()
+      }),
+    []
+  );
+  const [storedWorkspace] = useState<StoredWorkspace>(() =>
+    loadLocalWorkspace(
+      workspaceStorageKey,
+      {
+        friends: mockFriends,
+        receipt: demoReceipt,
+        activeRole: "unset",
+        payerStep: "home",
+        connectedFriendIds: initialConnectedFriendIds,
+        selectedDinnerFriendIds: [],
+        activeParticipantId: "nico",
+        paymentProofs: {},
+        statuses: {},
+        notifications: defaultNotifications
+      },
+      options.storage
+    )
+  );
+  const [friends, setFriends] = useState<Friend[]>(storedWorkspace.friends);
+  const [receipt, setReceipt] = useState<Receipt>(storedWorkspace.receipt);
+  const [activeRole, setActiveRole] = useState<ActiveRole>(storedWorkspace.activeRole);
+  const [payerStep, setPayerStep] = useState<PayerStep>(storedWorkspace.payerStep);
+  const [connectedFriendIds, setConnectedFriendIds] = useState<string[]>(
+    storedWorkspace.connectedFriendIds
+  );
+  const [selectedDinnerFriendIds, setSelectedDinnerFriendIds] = useState<string[]>(
+    storedWorkspace.selectedDinnerFriendIds
+  );
   const [capturedReceiptImageUrl, setCapturedReceiptImageUrl] = useState("");
   const [parseStatus, setParseStatus] = useState<ParseStatus>("Idle");
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
-  const [activeParticipantId, setActiveParticipantId] = useState("nico");
-  const [paymentProofs, setPaymentProofs] = useState<Record<string, PaymentProof>>({});
-  const [statuses, setStatuses] = useState<Record<string, PaymentStatus>>({});
+  const [activeParticipantId, setActiveParticipantId] = useState(
+    storedWorkspace.activeParticipantId
+  );
+  const [paymentProofs, setPaymentProofs] = useState<Record<string, PaymentProof>>(
+    storedWorkspace.paymentProofs
+  );
+  const [statuses, setStatuses] = useState<Record<string, PaymentStatus>>(
+    storedWorkspace.statuses
+  );
   const activeGroup = useMemo(() => {
     const dinnerFriendIds =
       selectedDinnerFriendIds.length > 0 ? selectedDinnerFriendIds : connectedFriendIds;
@@ -60,18 +121,41 @@ export function useSplitSnapState() {
         .map((proof) => proof.extracted.transactionNumber),
     [paymentProofs]
   );
-  const [notifications, setNotifications] = useState<Notification[]>(() =>
-    createExpenseNotifications({
-      expenseId,
-      payerName: "Maya",
-      dinnerName: demoGroup.name,
-      results: calculateSplit(
-        demoReceipt,
-        buildGroup([payerId, ...initialConnectedFriendIds])
-      ).results,
-      createdAt: new Date().toISOString()
-    })
+  const [notifications, setNotifications] = useState<Notification[]>(
+    storedWorkspace.notifications
   );
+
+  useEffect(() => {
+    const receiptWithoutImage = { ...receipt, imageUrl: "" };
+    saveLocalWorkspace(
+      workspaceStorageKey,
+      {
+        friends,
+        receipt: receiptWithoutImage,
+        activeRole,
+        payerStep,
+        connectedFriendIds,
+        selectedDinnerFriendIds,
+        activeParticipantId,
+        paymentProofs,
+        statuses,
+        notifications
+      },
+      options.storage
+    );
+  }, [
+    activeParticipantId,
+    activeRole,
+    connectedFriendIds,
+    friends,
+    notifications,
+    options.storage,
+    payerStep,
+    paymentProofs,
+    receipt,
+    selectedDinnerFriendIds,
+    statuses
+  ]);
 
   function connectFriend(friendId: string) {
     setConnectedFriendIds((current) =>

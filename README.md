@@ -1,33 +1,72 @@
 # SplitSnap
 
-SplitSnap is a React web prototype for splitting restaurant receipts in a group. It simulates receipt OCR, lets the payer assign items to friends, calculates shared-item splits, previews push-style reminders, and shows subtle payment reliability context.
+SplitSnap is an installable React PWA for scanning restaurant receipts, assigning shared items, tracking balances, validating payment screenshots, and reminding friends with an itemized breakdown.
 
 ## Run Locally
 
 ```bash
 npm install
-npm run dev
+npm run dev -- --port 5174
 ```
 
-Open the local Vite URL shown in the terminal, usually `http://localhost:5173`.
+Without Firebase settings, SplitSnap enters a labeled local-only mode and stores the current workspace in the browser. This is useful for development, but it does not synchronize across devices.
 
-## Test
+## Test And Build
 
 ```bash
 npm run test:run
 npm run build
+npm run preview
 ```
 
-## Vercel
+The production build includes a web manifest, install icons, an offline app shell, and a service worker.
 
-This prototype can be deployed to Vercel as a static Vite app. Develop locally first, then deploy a preview with:
+## Firebase Setup
+
+1. Create a Firebase project and add a Web app.
+2. In Authentication, enable the Google provider.
+3. Create a Firestore database and a Storage bucket.
+4. In Cloud Messaging, create a Web Push certificate and copy its public VAPID key.
+5. Copy `.env.example` to `.env.local` and fill every `VITE_FIREBASE_*` value.
+6. Deploy `firestore.rules` and `storage.rules` with the Firebase CLI or console.
+7. Create a Firebase service account for the Vercel notification endpoint.
+
+Firebase client settings are identifiers, not server secrets. Access is enforced by Firestore and Storage rules. `FIREBASE_SERVICE_ACCOUNT_JSON` is a server secret and must only be stored in Vercel.
+
+## Environment Variables
+
+Client:
+
+```text
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID
+VITE_FIREBASE_VAPID_KEY
+```
+
+Server:
+
+```text
+FIREBASE_SERVICE_ACCOUNT_JSON
+```
+
+Use one-line JSON for the service account value. Do not add `VITE_` to it.
+
+## Vercel Deployment
 
 ```bash
 vercel
 ```
 
-Production push notifications are not implemented in v1. The notification center shows the push messages SplitSnap would send; later versions can connect this notification service boundary to Firebase Cloud Messaging, OneSignal, Expo, or native push.
+Add the same environment variables in Vercel Project Settings. The static app is served by Vite; `/api/notifications/send` runs as a Vercel Function and verifies the caller's Firebase ID token before sending through Firebase Cloud Messaging.
 
-## OCR Direction
+Google sign-in requires the deployed Vercel domain to be listed under Firebase Authentication's authorized domains.
 
-v1 uses simulated OCR. The intended production path is OCR first, then a YOLO-style receipt layout fallback when confidence is low or totals do not reconcile.
+## Current Production Boundary
+
+The repository contains real Google authentication, Firestore and Storage service boundaries, friend-code connection logic, PWA installation, push-token registration, and an authenticated push endpoint. Without a configured Firebase project, the current receipt screens run in local-only mode.
+
+Receipt OCR runs Tesseract in the browser and sends low-confidence rows through the existing fallback/manual-review pipeline. Screenshot payment validation is automated prototype validation, not bank-provider verification.
