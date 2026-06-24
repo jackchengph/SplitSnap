@@ -40,10 +40,27 @@ export default defineConfig({
         ]
       },
       injectManifest: {
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"]
+        globPatterns: ["**/*.{js,css,html,svg,png,webp,woff2}"]
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/firebase")) {
+            return "firebase";
+          }
+          if (id.includes("node_modules/lucide-react")) {
+            return "icons";
+          }
+          if (id.includes("node_modules/tesseract.js")) {
+            return "ocr";
+          }
+        }
+      }
+    }
+  },
   test: {
     environment: "jsdom",
     globals: true,

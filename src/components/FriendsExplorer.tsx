@@ -24,7 +24,7 @@ export function FriendsExplorer({
       <header className="app-header">
         <div>
           <p className="eyebrow">Friends</p>
-          <h1>Find dinner friends</h1>
+          <h1>Your friends</h1>
         </div>
         <button type="button" className="secondary nav-button" onClick={onHome}>
           Home

@@ -30,6 +30,7 @@ The production build includes a web manifest, install icons, an offline app shel
 5. Copy `.env.example` to `.env.local` and fill every `VITE_FIREBASE_*` value.
 6. Deploy `firestore.rules` and `storage.rules` with the Firebase CLI or console.
 7. Create a Firebase service account for the Vercel notification endpoint.
+8. Add the deployed Vercel domain under Authentication > Settings > Authorized domains.
 
 Firebase client settings are identifiers, not server secrets. Access is enforced by Firestore and Storage rules. `FIREBASE_SERVICE_ACCOUNT_JSON` is a server secret and must only be stored in Vercel.
 
@@ -65,8 +66,24 @@ Add the same environment variables in Vercel Project Settings. The static app is
 
 Google sign-in requires the deployed Vercel domain to be listed under Firebase Authentication's authorized domains.
 
+The `expenses` collection uses an `array-contains` query on `participantIds`.
+Firestore creates the required single-field index automatically. Restaurant
+records are readable by authenticated users; writes require an Admin custom
+claim.
+
+The Profile page includes live readiness indicators for Firebase client
+configuration, the FCM VAPID key, service-worker support, and browser
+notification permission. These checks report configuration only; delivered
+push must still be verified against a real Firebase project and registered
+device.
+
 ## Current Production Boundary
 
 The repository contains real Google authentication, Firestore and Storage service boundaries, friend-code connection logic, PWA installation, push-token registration, and an authenticated push endpoint. Without a configured Firebase project, the current receipt screens run in local-only mode.
 
 Receipt OCR runs Tesseract in the browser and sends low-confidence rows through the existing fallback/manual-review pipeline. Screenshot payment validation is automated prototype validation, not bank-provider verification.
+
+## Restaurant Image Credits
+
+- Sushi and healthy bowl imagery: Unsplash.
+- Kare-kare image: Wikimedia Commons, `Kare-kare and Bagoong at La Herencia Comida.jpg`.

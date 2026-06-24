@@ -10,6 +10,7 @@ import {
 } from "../domain/paymentProofService";
 import { updateReliabilityAfterPayment } from "../domain/reliability";
 import { parseCapturedReceipt } from "../domain/receiptParsingService";
+import { menuSelectionsToReceipt } from "../domain/restaurantCatalog";
 import { calculateSplit } from "../domain/splitCalculator";
 import { loadLocalWorkspace, saveLocalWorkspace } from "../services/localWorkspace";
 import type {
@@ -22,6 +23,11 @@ import type {
   PaymentStatus,
   Receipt
 } from "../domain/types";
+import type {
+  MenuCategory,
+  MenuSelection,
+  Restaurant
+} from "../domain/restaurantTypes";
 
 const expenseId = "saturday-dinner-2026-06-20";
 type ActiveRole = "unset" | "payer" | "participant";
@@ -181,6 +187,53 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
 
   function goToScanner() {
     setPayerStep("scanner");
+  }
+
+  function useRestaurantMenu(
+    restaurant: Restaurant,
+    menu: MenuCategory[],
+    selections: MenuSelection[]
+  ) {
+    const nextReceipt = menuSelectionsToReceipt(
+      restaurant,
+      menu,
+      selections,
+      activeGroup.participantIds
+    );
+    setReceipt(nextReceipt);
+    setParseStatus("Ready to split");
+    setParseWarnings([]);
+    setPayerStep("review");
+  }
+
+  function useManualReceipt() {
+    const nextReceipt: Receipt = {
+      id: `manual-${Date.now()}`,
+      merchantName: "Manual dinner",
+      date: new Date().toISOString().slice(0, 10),
+      imageUrl: "",
+      ocrConfidence: 1,
+      parserMode: "manual",
+      parseStatus: "Ready to split",
+      parseWarnings: [],
+      items: [
+        {
+          id: `manual-item-${Date.now()}`,
+          name: "New item",
+          quantity: 1,
+          price: 0,
+          assignedParticipantIds: activeGroup.participantIds,
+          confidence: 1,
+          parseSource: "manual",
+          needsReview: false
+        }
+      ],
+      tax: 0,
+      serviceCharge: 0,
+      total: 0
+    };
+    setReceipt(nextReceipt);
+    setPayerStep("review");
   }
 
   async function captureReceipt(imageDataUrl: string) {
@@ -379,6 +432,8 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     goToGroupSetup,
     goToScanner,
     captureReceipt,
+    useRestaurantMenu,
+    useManualReceipt,
     toggleItemParticipant,
     updateItemPrice,
     updateItemName,

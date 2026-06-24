@@ -23,8 +23,8 @@ export function GroupSetup({
     <main className="app-shell narrow-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Group setup</p>
-          <h1>Who ate with you?</h1>
+          <p className="eyebrow">Dinner group</p>
+          <h1>Who joined this meal?</h1>
         </div>
         <button type="button" className="secondary nav-button" onClick={onHome}>
           Home
@@ -63,7 +63,7 @@ export function GroupSetup({
             onClick={onNext}
             disabled={selectedDinnerFriendIds.length === 0}
           >
-            Next: scan receipt
+            Next: add the bill
           </button>
         </div>
       </section>

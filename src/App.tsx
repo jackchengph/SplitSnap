@@ -1,74 +1,46 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { SessionProvider, useSession } from "./app/SessionProvider";
 import { useSplitSnapState } from "./app/useSplitSnapState";
+import { ActivityPage } from "./components/ActivityPage";
+import { AppShell, type AppPage } from "./components/AppShell";
+import { CreateSplitFlow } from "./components/CreateSplitFlow";
 import { FriendsExplorer } from "./components/FriendsExplorer";
-import { GroupPanel } from "./components/GroupPanel";
 import { GroupSetup } from "./components/GroupSetup";
-import { ItemAssignment } from "./components/ItemAssignment";
-import { NotificationCenter } from "./components/NotificationCenter";
+import { HomeDashboard } from "./components/HomeDashboard";
 import { ParticipantDashboard } from "./components/ParticipantDashboard";
-import { PayerHome } from "./components/PayerHome";
-import { PaymentProofStatus } from "./components/PaymentProofStatus";
-import { ReceiptCapture } from "./components/ReceiptCapture";
+import { ProfilePage } from "./components/ProfilePage";
 import { ReceiptScanner } from "./components/ReceiptScanner";
-import { RoleChooser } from "./components/RoleChooser";
-import { SettlementPanel } from "./components/SettlementPanel";
+import { RestaurantMenu } from "./components/RestaurantMenu";
+import { RestaurantSearch } from "./components/RestaurantSearch";
 import { SignInScreen } from "./components/SignInScreen";
-import { formatCurrency } from "./domain/format";
+import { SplitReviewPage } from "./components/SplitReviewPage";
+import {
+  getSeedMenu,
+  getSeedRestaurant
+} from "./domain/restaurantCatalog";
+import { seedRestaurants } from "./domain/restaurantData";
+import type { Restaurant } from "./domain/restaurantTypes";
 import { firebaseRuntime } from "./platform/firebase";
 import { requestPushPermission } from "./services/notificationClient";
 
-function SessionChrome({ children }: { children: ReactNode }) {
-  const session = useSession();
-  const [pushStatus, setPushStatus] = useState("");
-
-  async function enableNotifications() {
-    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY?.trim();
-    if (!session.user || !vapidKey) {
-      setPushStatus("Add the Firebase VAPID key before enabling push.");
-      return;
-    }
-    try {
-      const permission = await requestPushPermission(session.user.id, vapidKey);
-      setPushStatus(
-        permission === "granted"
-          ? "Push notifications enabled"
-          : "Push notifications remain off"
-      );
-    } catch {
-      setPushStatus("Push setup failed. Check Firebase messaging settings.");
-    }
-  }
-
-  return (
-    <>
-      <div className={`session-bar ${session.mode}`}>
-        <span>
-          <strong>{session.user?.displayName}</strong>
-          {session.mode === "local"
-            ? " | Local-only mode - add Firebase settings to sync across devices"
-            : " | Signed in to SplitSnap cloud"}
-        </span>
-        {session.mode === "cloud" ? (
-          <div className="session-actions">
-            {pushStatus ? <span aria-live="polite">{pushStatus}</span> : null}
-            <button type="button" onClick={() => void enableNotifications()}>
-              Enable notifications
-            </button>
-            <button type="button" onClick={() => void session.signOut()}>
-              Sign out
-            </button>
-          </div>
-        ) : null}
-      </div>
-      {children}
-    </>
-  );
-}
+type FlowStep =
+  | "none"
+  | "group"
+  | "source"
+  | "restaurant"
+  | "menu"
+  | "scanner"
+  | "review"
+  | "participant";
 
 export function SplitSnapApp() {
   const session = useSession();
   const state = useSplitSnapState();
+  const [currentPage, setCurrentPage] = useState<AppPage>("home");
+  const [flowStep, setFlowStep] = useState<FlowStep>("none");
+  const [selectedRestaurant, setSelectedRestaurant] =
+    useState<Restaurant | null>(null);
+  const [restaurantNeedsGroup, setRestaurantNeedsGroup] = useState(false);
   const activeSplit = state.split.results.find(
     (result) => result.participantId === state.activeParticipantId
   );
@@ -78,139 +50,205 @@ export function SplitSnapApp() {
   }
 
   if (session.status === "signed-out") {
-    return <SignInScreen error={session.error} onSignIn={() => void session.signIn()} />;
-  }
-
-  if (state.activeRole === "unset") {
     return (
-      <SessionChrome>
-        <RoleChooser
-          onChoosePayer={() => state.setActiveRole("payer")}
-          onChooseParticipant={() => state.setActiveRole("participant")}
-        />
-      </SessionChrome>
+      <SignInScreen
+        error={session.error}
+        localPreview={session.mode === "local"}
+        onSignIn={() => void session.signIn()}
+        onLocalPreview={session.enterLocalPreview}
+      />
     );
   }
 
-  if (state.activeRole === "participant") {
-    return (
-      <SessionChrome>
-        <ParticipantDashboard
-          friends={state.friends}
-          activeParticipantId={state.activeParticipantId}
-          splitResult={activeSplit}
-          paymentProof={state.paymentProofs[state.activeParticipantId]}
-          onSelectParticipant={state.setActiveParticipantId}
-          onSubmitProof={state.submitPaymentProof}
-          onBack={() => state.setActiveRole("unset")}
-        />
-      </SessionChrome>
-    );
+  function goHome() {
+    setFlowStep("none");
+    setCurrentPage("home");
   }
 
-  if (state.payerStep === "home") {
-    return (
-      <SessionChrome>
-        <PayerHome
-          friends={state.friends}
-          connectedFriendIds={state.connectedFriendIds}
-          selectedDinnerFriendIds={state.selectedDinnerFriendIds}
-          currentReceiptTotal={state.receipt.total}
-          onConnectFriends={() => state.setPayerStep("friends")}
-          onStartSplit={state.goToGroupSetup}
-          onBack={() => state.setActiveRole("unset")}
-        />
-      </SessionChrome>
-    );
+  function navigate(page: AppPage) {
+    setFlowStep("none");
+    setCurrentPage(page);
   }
 
-  if (state.payerStep === "friends") {
-    return (
-      <SessionChrome>
-        <FriendsExplorer
-          friends={state.friends}
-          connectedFriendIds={state.connectedFriendIds}
-          onConnect={state.connectFriend}
-          onNext={state.goToGroupSetup}
-          onHome={() => state.setPayerStep("home")}
-        />
-      </SessionChrome>
-    );
-  }
+  let content;
 
-  if (state.payerStep === "group") {
-    return (
-      <SessionChrome>
-        <GroupSetup
-          friends={state.friends}
-          connectedFriendIds={state.connectedFriendIds}
-          selectedDinnerFriendIds={state.selectedDinnerFriendIds}
-          onToggleFriend={state.toggleDinnerFriend}
-          onNext={state.goToScanner}
-          onHome={() => state.setPayerStep("home")}
-        />
-      </SessionChrome>
+  if (flowStep === "group") {
+    content = (
+      <GroupSetup
+        friends={state.friends}
+        connectedFriendIds={state.connectedFriendIds}
+        selectedDinnerFriendIds={state.selectedDinnerFriendIds}
+        onToggleFriend={state.toggleDinnerFriend}
+        onNext={() => {
+          if (selectedRestaurant && restaurantNeedsGroup) {
+            setRestaurantNeedsGroup(false);
+            setFlowStep("menu");
+            return;
+          }
+          setFlowStep("source");
+        }}
+        onHome={goHome}
+      />
     );
-  }
-
-  if (state.payerStep === "scanner" || state.payerStep === "parsing") {
-    return (
-      <SessionChrome>
-        <ReceiptScanner
-          parseStatus={state.parseStatus}
-          parseWarnings={state.parseWarnings}
-          onCapture={state.captureReceipt}
-          onHome={() => state.setPayerStep("home")}
-        />
-      </SessionChrome>
+  } else if (flowStep === "source") {
+    content = (
+      <CreateSplitFlow
+        onReceipt={() => setFlowStep("scanner")}
+        onRestaurant={() => {
+          setRestaurantNeedsGroup(false);
+          setFlowStep("restaurant");
+        }}
+        onManual={() => {
+          state.useManualReceipt();
+          setFlowStep("review");
+        }}
+      />
+    );
+  } else if (flowStep === "restaurant") {
+    content = (
+      <RestaurantSearch
+        restaurants={seedRestaurants}
+        onBack={() => setFlowStep("source")}
+        onSelect={(restaurant) => {
+          setSelectedRestaurant(restaurant);
+          setFlowStep(restaurantNeedsGroup ? "group" : "menu");
+        }}
+      />
+    );
+  } else if (flowStep === "menu" && selectedRestaurant) {
+    content = (
+      <RestaurantMenu
+        restaurant={selectedRestaurant}
+        categories={getSeedMenu(selectedRestaurant.id)}
+        selections={[]}
+        onBack={() => setFlowStep("restaurant")}
+        onToggle={() => undefined}
+        onQuantityChange={() => undefined}
+        onContinue={(selections) => {
+          state.useRestaurantMenu(
+            selectedRestaurant,
+            getSeedMenu(selectedRestaurant.id),
+            selections
+          );
+          setFlowStep("review");
+        }}
+      />
+    );
+  } else if (flowStep === "scanner") {
+    content = (
+      <ReceiptScanner
+        parseStatus={state.parseStatus}
+        parseWarnings={state.parseWarnings}
+        onCapture={async (imageDataUrl) => {
+          await state.captureReceipt(imageDataUrl);
+          setFlowStep("review");
+        }}
+        onHome={goHome}
+      />
+    );
+  } else if (flowStep === "review") {
+    content = (
+      <SplitReviewPage
+        friends={state.friends}
+        group={state.group}
+        receipt={state.receipt}
+        split={state.split}
+        notifications={state.notifications}
+        paymentProofs={state.paymentProofs}
+        onHome={goHome}
+        onUpload={state.simulateUpload}
+        onToggleParticipant={state.toggleItemParticipant}
+        onUpdatePrice={state.updateItemPrice}
+        onUpdateName={state.updateItemName}
+        onReminder={state.sendReminder}
+        onMarkPaid={state.markPaid}
+      />
+    );
+  } else if (flowStep === "participant") {
+    content = (
+      <ParticipantDashboard
+        friends={state.friends}
+        activeParticipantId={state.activeParticipantId}
+        splitResult={activeSplit}
+        paymentProof={state.paymentProofs[state.activeParticipantId]}
+        onSelectParticipant={state.setActiveParticipantId}
+        onSubmitProof={state.submitPaymentProof}
+        onBack={() => {
+          setFlowStep("none");
+          setCurrentPage("activity");
+        }}
+      />
+    );
+  } else if (currentPage === "friends") {
+    content = (
+      <FriendsExplorer
+        friends={state.friends}
+        connectedFriendIds={state.connectedFriendIds}
+        onConnect={state.connectFriend}
+        onNext={() => setFlowStep("group")}
+        onHome={goHome}
+      />
+    );
+  } else if (currentPage === "activity") {
+    content = (
+      <ActivityPage
+        friends={state.friends}
+        split={state.split}
+        onOpenParticipant={(participantId) => {
+          state.setActiveParticipantId(participantId);
+          setFlowStep("participant");
+        }}
+      />
+    );
+  } else if (currentPage === "profile") {
+    content = (
+      <ProfilePage
+        user={session.user!}
+        mode={session.mode}
+        notificationReady={
+          session.mode === "cloud" &&
+          Boolean(import.meta.env.VITE_FIREBASE_VAPID_KEY)
+        }
+        onEnableNotifications={async () => {
+          const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+          if (!session.user || !vapidKey) {
+            throw new Error("Firebase push settings are incomplete.");
+          }
+          return requestPushPermission(session.user.id, vapidKey);
+        }}
+        onSignOut={() => void session.signOut()}
+      />
+    );
+  } else {
+    content = (
+      <HomeDashboard
+        friends={state.friends}
+        split={state.split}
+        restaurants={seedRestaurants}
+        userName={session.user?.displayName ?? "there"}
+        onStartSplit={() => setFlowStep("group")}
+        onOpenRestaurants={() => {
+          setRestaurantNeedsGroup(true);
+          setFlowStep("restaurant");
+        }}
+        onSelectRestaurant={(restaurant) => {
+          setSelectedRestaurant(restaurant);
+          setRestaurantNeedsGroup(true);
+          setFlowStep("group");
+        }}
+      />
     );
   }
 
   return (
-    <SessionChrome>
-      <main className="app-shell">
-        <header className="app-header">
-          <div>
-            <p className="eyebrow">Receipt-to-reminder dinner splits</p>
-            <h1>SplitSnap</h1>
-          </div>
-          <div className="header-actions">
-            <div className="header-total">
-              <span>Total receipt</span>
-              <strong>{formatCurrency(state.receipt.total)}</strong>
-            </div>
-            <button type="button" className="secondary nav-button" onClick={() => state.setPayerStep("home")}>
-              Home
-            </button>
-          </div>
-        </header>
-
-        <div className="dashboard-grid">
-          <div className="workflow-column">
-            <ReceiptCapture receipt={state.receipt} onUpload={state.simulateUpload} />
-            <ItemAssignment
-              receipt={state.receipt}
-              friends={state.friends}
-              group={state.group}
-              onToggleParticipant={state.toggleItemParticipant}
-              onUpdatePrice={state.updateItemPrice}
-              onUpdateName={state.updateItemName}
-            />
-          </div>
-          <aside className="summary-column">
-            <GroupPanel friends={state.friends} group={state.group} />
-            <SettlementPanel
-              friends={state.friends}
-              split={state.split}
-              onReminder={state.sendReminder}
-              onMarkPaid={state.markPaid}
-            />
-            <PaymentProofStatus friends={state.friends} paymentProofs={state.paymentProofs} />
-            <NotificationCenter friends={state.friends} notifications={state.notifications} />
-          </aside>
-        </div>
-      </main>
-    </SessionChrome>
+    <AppShell
+      currentPage={currentPage}
+      userName={session.user?.displayName ?? "SplitSnap user"}
+      sessionMode={session.mode}
+      onNavigate={navigate}
+    >
+      {content}
+    </AppShell>
   );
 }
 

@@ -23,6 +23,7 @@ interface SessionContextValue {
   error: string;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  enterLocalPreview: () => void;
 }
 
 interface SessionProviderProps {
@@ -33,7 +34,7 @@ interface SessionProviderProps {
 
 const localUser: SessionUser = {
   id: "local-user",
-  displayName: "Local user",
+  displayName: "Maya",
   email: "",
   photoURL: null
 };
@@ -46,10 +47,10 @@ export function SessionProvider({
   authAdapter = firebaseAuthAdapter
 }: SessionProviderProps) {
   const [user, setUser] = useState<SessionUser | null>(
-    cloudConfigured ? null : localUser
+    null
   );
   const [status, setStatus] = useState<SessionStatus>(
-    cloudConfigured ? "loading" : "authenticated"
+    cloudConfigured ? "loading" : "signed-out"
   );
   const [error, setError] = useState("");
 
@@ -92,6 +93,8 @@ export function SessionProvider({
       signOut: async () => {
         setError("");
         if (!cloudConfigured) {
+          setUser(null);
+          setStatus("signed-out");
           return;
         }
         try {
@@ -99,6 +102,13 @@ export function SessionProvider({
         } catch (caught) {
           setError(caught instanceof Error ? caught.message : "Sign-out failed.");
         }
+      },
+      enterLocalPreview: () => {
+        if (cloudConfigured) {
+          return;
+        }
+        setUser(localUser);
+        setStatus("authenticated");
       }
     }),
     [authAdapter, cloudConfigured, error, status, user]

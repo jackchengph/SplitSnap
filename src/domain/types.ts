@@ -56,7 +56,12 @@ export interface Receipt {
   date: string;
   imageUrl: string;
   ocrConfidence: number;
-  parserMode: "sample" | "simulated-upload" | "camera-ocr-yolo";
+  parserMode:
+    | "sample"
+    | "simulated-upload"
+    | "camera-ocr-yolo"
+    | "restaurant-menu"
+    | "manual";
   parseStatus?: ParseStatus;
   parseWarnings?: string[];
   items: ReceiptItem[];

@@ -28,6 +28,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /restaurants/{restaurantId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.token.admin == true;
+    }
+
     match /friendships/{friendshipId} {
       allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
       allow create: if signedIn()

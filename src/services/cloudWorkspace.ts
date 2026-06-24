@@ -1,8 +1,11 @@
 import {
+  collection,
   doc,
   getDoc,
   onSnapshot,
+  query,
   setDoc,
+  where,
   writeBatch,
   type Firestore
 } from "firebase/firestore";
@@ -154,6 +157,28 @@ export function subscribeToExpense(
         snapshot.exists()
           ? (snapshot.data() as CloudExpenseDocument)
           : null
+      );
+    },
+    onError
+  );
+}
+
+export function subscribeToUserExpenses(
+  userId: string,
+  onValue: (expenses: CloudExpenseDocument[]) => void,
+  onError: (error: Error) => void
+): () => void {
+  const expensesQuery = query(
+    collection(requireFirestore(), "expenses"),
+    where("participantIds", "array-contains", userId)
+  );
+  return onSnapshot(
+    expensesQuery,
+    (snapshot) => {
+      onValue(
+        snapshot.docs.map(
+          (expense) => expense.data() as CloudExpenseDocument
+        )
       );
     },
     onError
