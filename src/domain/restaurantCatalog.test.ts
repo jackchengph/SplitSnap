@@ -3,10 +3,50 @@ import {
   getSeedMenu,
   getSeedRestaurant,
   menuSelectionsToReceipt,
+  searchRestaurants,
   searchSeedRestaurants
 } from "./restaurantCatalog";
+import { bgcRestaurants } from "./restaurants/restaurantIndex";
 
 describe("restaurant catalog", () => {
+  it("contains ten active BGC restaurant candidates", () => {
+    expect(bgcRestaurants).toHaveLength(10);
+    expect(
+      bgcRestaurants.every((restaurant) => restaurant.area === "BGC, Taguig")
+    ).toBe(true);
+    expect(
+      bgcRestaurants.every(
+        (restaurant) => restaurant.snapshotStatus !== "retired"
+      )
+    ).toBe(true);
+  });
+
+  it("requires first-party location and menu sources", () => {
+    for (const restaurant of bgcRestaurants) {
+      expect(
+        restaurant.sources.some((source) => source.kind === "location")
+      ).toBe(true);
+      expect(
+        restaurant.sources.some((source) => source.kind === "menu")
+      ).toBe(true);
+      expect(
+        restaurant.sources.every((source) => source.url.startsWith("https://"))
+      ).toBe(true);
+    }
+  });
+
+  it("searches BGC restaurants by name, cuisine, and address", () => {
+    expect(searchRestaurants("filipino").map((item) => item.id)).toContain(
+      "manam-bgc"
+    );
+    expect(searchRestaurants("japanese").map((item) => item.id)).toContain(
+      "ooma-bgc"
+    );
+    expect(searchRestaurants("shangri-la").map((item) => item.id)).toContain(
+      "terraza-martinez-bgc"
+    );
+  });
+
   it("matches restaurants by name, cuisine, and area", () => {
     expect(searchSeedRestaurants("sushi").map((item) => item.id)).toContain(
       "sora-sushi"

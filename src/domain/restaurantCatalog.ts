@@ -1,5 +1,6 @@
 import type { Receipt } from "./types";
 import { seedMenus, seedRestaurants } from "./restaurantData";
+import { bgcRestaurants } from "./restaurants/restaurantIndex";
 import type {
   MenuCategory,
   MenuSelection,
@@ -12,6 +13,25 @@ function normalize(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+export function searchRestaurants(query: string) {
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery) {
+    return bgcRestaurants;
+  }
+
+  return bgcRestaurants.filter((restaurant) =>
+    normalize(
+      [
+        restaurant.name,
+        restaurant.cuisine,
+        restaurant.branchName,
+        restaurant.address,
+        ...restaurant.keywords
+      ].join(" ")
+    ).includes(normalizedQuery)
+  );
 }
 
 export function searchSeedRestaurants(query: string): Restaurant[] {
