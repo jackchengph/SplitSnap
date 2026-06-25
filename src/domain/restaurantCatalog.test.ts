@@ -45,4 +45,77 @@ describe("restaurant catalog", () => {
     expect(receipt.items[0].assignedParticipantIds).toEqual(["maya", "nico"]);
     expect(receipt.total).toBe(760);
   });
+
+  it("rejects a selected variable-price item without a resolved price", () => {
+    const restaurant = getSeedRestaurant("sora-sushi");
+    expect(restaurant).toBeDefined();
+
+    expect(() =>
+      menuSelectionsToReceipt(
+        restaurant!,
+        [
+          {
+            id: "market",
+            name: "Market",
+            items: [
+              {
+                id: "market-fish",
+                restaurantId: restaurant!.id,
+                categoryId: "market",
+                name: "Market fish",
+                description: "",
+                price: null,
+                priceLabel: "Market price",
+                requiresManualPrice: true,
+                sourceUrl: "https://example.com/official-menu",
+                available: true
+              }
+            ]
+          }
+        ],
+        [{ menuItemId: "market-fish", quantity: 1 }],
+        ["maya", "nico"]
+      )
+    ).toThrow("Enter a price for Market fish.");
+  });
+
+  it("uses a resolved manual unit price in the receipt", () => {
+    const restaurant = getSeedRestaurant("sora-sushi");
+    expect(restaurant).toBeDefined();
+
+    const receipt = menuSelectionsToReceipt(
+      restaurant!,
+      [
+        {
+          id: "market",
+          name: "Market",
+          items: [
+            {
+              id: "market-fish",
+              restaurantId: restaurant!.id,
+              categoryId: "market",
+              name: "Market fish",
+              description: "",
+              price: null,
+              priceLabel: "Market price",
+              requiresManualPrice: true,
+              sourceUrl: "https://example.com/official-menu",
+              available: true
+            }
+          ]
+        }
+      ],
+      [
+        {
+          menuItemId: "market-fish",
+          quantity: 2,
+          resolvedUnitPrice: 650
+        }
+      ],
+      ["maya", "nico"]
+    );
+
+    expect(receipt.items[0].price).toBe(1300);
+    expect(receipt.total).toBe(1300);
+  });
 });

@@ -112,7 +112,11 @@ export function RestaurantMenu({
                 </span>
               </label>
               <div className="menu-price">
-                <strong>{formatCurrency(item.price)}</strong>
+                <strong>
+                  {item.price === null
+                    ? item.priceLabel ?? "Price required"
+                    : formatCurrency(item.price)}
+                </strong>
                 {selection ? (
                   <div className="quantity-stepper">
                     <button

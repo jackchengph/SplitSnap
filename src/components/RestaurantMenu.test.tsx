@@ -27,4 +27,40 @@ describe("RestaurantMenu", () => {
     );
     expect(screen.getByText(/2 items selected/i)).toBeInTheDocument();
   });
+
+  it("shows the official label for a variable-price item", () => {
+    const restaurant = getSeedRestaurant("sora-sushi")!;
+    render(
+      <RestaurantMenu
+        restaurant={restaurant}
+        categories={[
+          {
+            id: "market",
+            name: "Market",
+            items: [
+              {
+                id: "market-fish",
+                restaurantId: restaurant.id,
+                categoryId: "market",
+                name: "Market fish",
+                description: "",
+                price: null,
+                priceLabel: "Market price",
+                requiresManualPrice: true,
+                sourceUrl: "https://example.com/official-menu",
+                available: true
+              }
+            ]
+          }
+        ]}
+        selections={[]}
+        onBack={vi.fn()}
+        onToggle={vi.fn()}
+        onQuantityChange={vi.fn()}
+        onContinue={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Market price")).toBeInTheDocument();
+  });
 });

@@ -47,12 +47,20 @@ export function menuSelectionsToReceipt(
     if (!menuItem || selection.quantity < 1) {
       return [];
     }
+    const unitPrice =
+      menuItem.price ??
+      (selection.resolvedUnitPrice && selection.resolvedUnitPrice > 0
+        ? selection.resolvedUnitPrice
+        : null);
+    if (unitPrice === null) {
+      throw new Error(`Enter a price for ${menuItem.name}.`);
+    }
     return [
       {
         id: menuItem.id,
         name: menuItem.name,
         quantity: selection.quantity,
-        price: menuItem.price * selection.quantity,
+        price: unitPrice * selection.quantity,
         assignedParticipantIds: participantIds,
         confidence: 1,
         parseSource: "manual" as const,
