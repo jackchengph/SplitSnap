@@ -32,16 +32,16 @@ export const bgcRestaurants: RestaurantIndexEntry[] = [
     id: "din-tai-fung-bgc",
     name: "Din Tai Fung",
     cuisine: "Taiwanese",
-    keywords: ["xiaolongbao", "dumplings", "noodles", "Uptown"],
+    keywords: ["xiaolongbao", "dumplings", "noodles", "High Street"],
     area: "BGC, Taguig",
-    branchName: "Uptown BGC",
-    address: "Uptown Mall, Bonifacio Global City, Taguig",
+    branchName: "High Street BGC",
+    address: "Bonifacio High Street, Taguig",
     priceLevel: 2,
     imageUrl: "/restaurants/din-tai-fung-bgc.webp",
     snapshotStatus: "review-needed",
     verifiedAt: "2026-06-25",
-    categoryCount: 0,
-    itemCount: 0,
+    categoryCount: 15,
+    itemCount: 155,
     sources: [
       {
         label: "Official Din Tai Fung locations",
@@ -67,8 +67,8 @@ export const bgcRestaurants: RestaurantIndexEntry[] = [
     imageUrl: "/restaurants/ooma-bgc.webp",
     snapshotStatus: "review-needed",
     verifiedAt: "2026-06-25",
-    categoryCount: 0,
-    itemCount: 0,
+    categoryCount: 13,
+    itemCount: 104,
     sources: [
       {
         label: "Official Ooma locations",
@@ -94,8 +94,8 @@ export const bgcRestaurants: RestaurantIndexEntry[] = [
     imageUrl: "/restaurants/eight-cuts-bgc.webp",
     snapshotStatus: "review-needed",
     verifiedAt: "2026-06-25",
-    categoryCount: 0,
-    itemCount: 0,
+    categoryCount: 12,
+    itemCount: 182,
     sources: [
       {
         label: "Official 8Cuts locations",

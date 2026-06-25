@@ -14,7 +14,11 @@ export function createMenuRegistry(loaders: Record<string, MenuLoader>) {
   };
 }
 
-const menuRegistry = createMenuRegistry({});
+const menuRegistry = createMenuRegistry({
+  "din-tai-fung-bgc": () => import("./menus/din-tai-fung-bgc"),
+  "ooma-bgc": () => import("./menus/ooma-bgc"),
+  "eight-cuts-bgc": () => import("./menus/eight-cuts-bgc")
+});
 
 export function loadRestaurantMenu(
   restaurantId: string
