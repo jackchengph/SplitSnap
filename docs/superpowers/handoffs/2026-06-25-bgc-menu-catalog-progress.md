@@ -155,6 +155,36 @@ The final ten should therefore be:
 - Visual corrections were required for rows such as Seared Steak Bowl `1350`,
   Tamago sashimi `180`, Salmon Skin nigiri `150`, and specialty drinks `180`.
 
+## Terraza Capture Notes
+
+- Official page: `https://www.nikkei.com.ph/terraza-martinez-menu`
+- The Wix page payload listed 21 official Terraza menu images:
+  - `TERRAZA-MAIN-MENU-02.png`
+  - `TERRAZA-MAIN-MENU-03.png`
+  - `TERRAZA-MAIN-MENU-04.png`
+  - `TERRAZA-MAIN-MENU-05.png`
+  - `TERRAZA-MAIN-MENU-06.png`
+  - `TERRAZA-MAIN-MENU-07.png`
+  - `TERRAZA-MAIN-MENU-08.png`
+  - `TERRAZA-MAIN-MENU-09.png`
+  - `2025  Terraza Martinez - Cream_07032025_Updated price.png`
+  - `TERRAZA-MAIN-MENU-11.png`
+  - `TERRAZA-MAIN-MENU-12.png`
+  - `TERRAZA-MAIN-MENU-13.png`
+  - `TERRAZA-MAIN-MENU-14.png`
+  - `TERRAZA-MAIN-MENU-15.png`
+  - `TERRAZA-MAIN-MENU-16.png`
+  - `TERRAZA-MAIN-MENU-17.png`
+  - `TERRAZA-MAIN-MENU-18.png`
+  - `TERRAZA-MAIN-MENU-19.png`
+  - `TERRAZA-MAIN-MENU-20.png`
+  - `TERRAZA-MAIN-MENU-x12025-12-03-Chef's-Specials.png`
+  - `TERRAZA-MAIN-MENU-x22025-11-10-Happy-Hour.png`
+- Downloaded and OCRed working copies are currently under
+  `/private/tmp/splitsnap-menus/terraza/full/`.
+- OCR is good enough for a first pass but still needs visual reconciliation
+  before creating `terraza-martinez-bgc.ts`.
+
 ## Important Data Rules
 
 - Never guess a missing price; use `price: null` and manual-price resolution.
