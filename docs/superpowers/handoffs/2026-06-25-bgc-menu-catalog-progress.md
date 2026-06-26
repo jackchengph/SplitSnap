@@ -34,6 +34,7 @@ Chrome/Codex load; focused tests and the two-worker full suite passed.
 | Din Tai Fung | High Street BGC | 15 | 155 |
 | Ooma | BGC, 7th Avenue | 13 | 104 |
 | 8Cuts Burgers | Uptown BGC | 12 | 182 |
+| Nikkei Nama Bar | One Bonifacio High Street | 15 | 283 |
 
 The rows include base items, price-changing required serving/patty variants,
 and deduplicated paid add-ons/modifiers. Free preparation choices are not
@@ -49,6 +50,25 @@ npm run test:run -- \
 ```
 
 Latest result before pausing: 3 test files passed, 7 tests passed.
+
+Latest result after resuming on June 26, 2026:
+
+```bash
+npm run test:run -- \
+  src/domain/restaurants/catalogAudit.test.ts \
+  src/domain/restaurants/menuAudit.test.ts \
+  src/domain/restaurants/menuRegistry.test.ts \
+  src/domain/restaurantCatalog.test.ts
+```
+
+Result: 4 test files passed, 16 tests passed.
+
+Also passed:
+
+```bash
+npx tsc --noEmit
+git diff --check
+```
 
 ## Official Moment API Details
 
@@ -89,7 +109,7 @@ Manam must be removed from the final candidate index. Its official direct-order
 venue list did not include a BGC branch on June 25, 2026. Do not supplement it
 with third-party menu data.
 
-Replace Manam with Smith & Wollensky BGC, using:
+Manam was replaced in `restaurantIndex.ts` with Smith & Wollensky BGC, using:
 
 - Location: `https://www.smithandwollensky.com.ph/`
 - Menus: `https://www.smithandwollensky.com.ph/menu/`
@@ -109,14 +129,31 @@ The final ten should therefore be:
 
 ## Next Actions
 
-1. Commit the current three generated menus and this handoff.
-2. Replace Manam with Smith & Wollensky in `restaurantIndex.ts`.
-3. Capture the seven remaining first-party menu sets.
+1. Capture the six remaining first-party menu sets.
+   - Wildflour Cafe + Bakery
+   - George and Onnie's
+   - Pink's
+   - Terraza Martinez
+   - Electric Garden
+   - Smith & Wollensky
 4. Add each snapshot and audit to `menuRegistry.ts` and
    `catalogAudit.test.ts`.
 5. Implement the persistent large-menu UI and real discovery migration.
 6. Perform the second source-to-app comparison before changing any
    `snapshotStatus` to `verified`.
+
+## Nikkei Capture Notes
+
+- Official page: `https://www.nikkei.com.ph/menu-bgc-highstreet`
+- The initially visible scrape exposed only two large menu images, but the Wix
+  page payload listed 20 BGC menu images:
+  - `BGC MAIN MENU02.png` through `BGC MAIN MENU16.png`
+  - `BGC MENU INSERT 1.png` through `BGC MENU INSERT 3.png`
+  - `BGC MAKETTO 1.png` and `BGC MAKETTO 2.png`
+- OCR was used as a helper only. The CLI Tesseract install could not read these
+  images through the `/tmp` symlink, but it worked with `/private/tmp/...`.
+- Visual corrections were required for rows such as Seared Steak Bowl `1350`,
+  Tamago sashimi `180`, Salmon Skin nigiri `150`, and specialty drinks `180`.
 
 ## Important Data Rules
 
@@ -127,4 +164,3 @@ The final ten should therefore be:
 - A category/item count mismatch blocks verification.
 - Do not claim the menus are live; label them official snapshots with the
   verification date.
-

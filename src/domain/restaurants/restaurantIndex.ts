@@ -2,28 +2,28 @@ import type { RestaurantIndexEntry } from "../restaurantTypes";
 
 export const bgcRestaurants: RestaurantIndexEntry[] = [
   {
-    id: "manam-bgc",
-    name: "Manam",
-    cuisine: "Filipino",
-    keywords: ["comfort food", "sisig", "BGC"],
+    id: "smith-and-wollensky-bgc",
+    name: "Smith & Wollensky",
+    cuisine: "American steakhouse",
+    keywords: ["steak", "seafood", "wine", "BGC"],
     area: "BGC, Taguig",
     branchName: "BGC",
-    address: "Bonifacio Global City, Taguig",
-    priceLevel: 2,
-    imageUrl: "/restaurants/manam-bgc.webp",
+    address: "Upper Ground Floor, One Bonifacio High Street, 5th Avenue, BGC, Taguig",
+    priceLevel: 4,
+    imageUrl: "/restaurants/smith-and-wollensky-bgc.webp",
     snapshotStatus: "review-needed",
-    verifiedAt: "2026-06-25",
+    verifiedAt: "2026-06-26",
     categoryCount: 0,
     itemCount: 0,
     sources: [
       {
-        label: "Official Manam locations",
-        url: "https://momentgroup.ph/brands/show/manam",
+        label: "Official Smith & Wollensky location",
+        url: "https://www.smithandwollensky.com.ph/",
         kind: "location"
       },
       {
-        label: "Official Manam menu",
-        url: "https://manam.momentfood.com/",
+        label: "Official Smith & Wollensky menu",
+        url: "https://www.smithandwollensky.com.ph/menu/",
         kind: "menu"
       }
     ]
@@ -201,9 +201,9 @@ export const bgcRestaurants: RestaurantIndexEntry[] = [
     priceLevel: 3,
     imageUrl: "/restaurants/nikkei-nama-bar-bgc.webp",
     snapshotStatus: "review-needed",
-    verifiedAt: "2026-06-25",
-    categoryCount: 0,
-    itemCount: 0,
+    verifiedAt: "2026-06-26",
+    categoryCount: 15,
+    itemCount: 283,
     sources: [
       {
         label: "Official Nikkei BGC location",

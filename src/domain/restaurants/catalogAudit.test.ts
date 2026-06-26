@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import dinTaiFungAudit from "./audits/din-tai-fung-bgc";
 import eightCutsAudit from "./audits/eight-cuts-bgc";
+import nikkeiNamaBarAudit from "./audits/nikkei-nama-bar-bgc";
 import oomaAudit from "./audits/ooma-bgc";
 import { loadRestaurantMenu } from "./menuRegistry";
 import { validateMenuSnapshot } from "./menuAudit";
@@ -9,7 +10,8 @@ import { bgcRestaurants } from "./restaurantIndex";
 const importedAudits = [
   dinTaiFungAudit,
   oomaAudit,
-  eightCutsAudit
+  eightCutsAudit,
+  nikkeiNamaBarAudit
 ];
 
 describe("verified BGC menu snapshots", () => {

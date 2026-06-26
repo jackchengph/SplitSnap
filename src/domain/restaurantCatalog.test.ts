@@ -36,8 +36,8 @@ describe("restaurant catalog", () => {
   });
 
   it("searches BGC restaurants by name, cuisine, and address", () => {
-    expect(searchRestaurants("filipino").map((item) => item.id)).toContain(
-      "manam-bgc"
+    expect(searchRestaurants("steakhouse").map((item) => item.id)).toContain(
+      "smith-and-wollensky-bgc"
     );
     expect(searchRestaurants("japanese").map((item) => item.id)).toContain(
       "ooma-bgc"
