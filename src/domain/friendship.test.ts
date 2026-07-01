@@ -19,6 +19,21 @@ const profile: UserProfile = {
 };
 
 describe("friendship domain", () => {
+  it("rejects empty friendship member ids", () => {
+    expect(() => friendshipIdFor("", "nico")).toThrow(
+      "A friendship requires two different users."
+    );
+    expect(() => friendshipIdFor("maya", "")).toThrow(
+      "A friendship requires two different users."
+    );
+  });
+
+  it("rejects same friendship member ids", () => {
+    expect(() => friendshipIdFor("maya", "maya")).toThrow(
+      "A friendship requires two different users."
+    );
+  });
+
   it("creates one stable ID regardless of member order", () => {
     expect(friendshipIdFor("maya", "nico")).toBe("maya__nico");
     expect(friendshipIdFor("nico", "maya")).toBe("maya__nico");
@@ -28,6 +43,7 @@ describe("friendship domain", () => {
     expect(canTransitionFriendship("pending", "connected", "recipient")).toBe(true);
     expect(canTransitionFriendship("pending", "declined", "recipient")).toBe(true);
     expect(canTransitionFriendship("connected", "removed", "member")).toBe(true);
+    expect(canTransitionFriendship("blocked", "removed", "member")).toBe(true);
     expect(canTransitionFriendship("blocked", "connected", "member")).toBe(false);
   });
 
