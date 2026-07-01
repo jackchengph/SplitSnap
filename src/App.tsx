@@ -213,6 +213,7 @@ export function SplitSnapApp() {
     content = (
       <ProfilePage
         user={session.user!}
+        profile={session.profile!}
         mode={authenticatedMode}
         notificationReady={
           session.mode === "cloud" &&

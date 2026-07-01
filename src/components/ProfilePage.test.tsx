@@ -10,6 +10,18 @@ const user = {
   photoURL: null
 };
 
+const profile = {
+  id: "maya-user",
+  displayName: "Maya",
+  photoURL: null,
+  handle: "maya",
+  friendCode: "SERVER88",
+  discoverableByHandle: true,
+  timezone: "Asia/Manila",
+  createdAt: "2026-07-01T10:00:00.000Z",
+  updatedAt: "2026-07-01T10:00:00.000Z"
+};
+
 describe("ProfilePage", () => {
   it("enables push notifications for a configured cloud session", async () => {
     const browserUser = userEvent.setup();
@@ -18,6 +30,7 @@ describe("ProfilePage", () => {
     render(
       <ProfilePage
         user={user}
+        profile={profile}
         mode="cloud"
         notificationReady
         onEnableNotifications={onEnableNotifications}
@@ -39,6 +52,7 @@ describe("ProfilePage", () => {
     render(
       <ProfilePage
         user={user}
+        profile={profile}
         mode="local"
         notificationReady={false}
         onEnableNotifications={vi.fn()}
@@ -49,5 +63,20 @@ describe("ProfilePage", () => {
     expect(
       screen.getByRole("button", { name: "Configure Firebase to enable push" })
     ).toBeDisabled();
+  });
+
+  it("shows the server-created friend code from the bootstrapped profile", () => {
+    render(
+      <ProfilePage
+        user={user}
+        profile={profile}
+        mode="cloud"
+        notificationReady
+        onEnableNotifications={vi.fn()}
+        onSignOut={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("SERVER88")).toBeInTheDocument();
   });
 });

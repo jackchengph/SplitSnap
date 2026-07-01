@@ -1,9 +1,11 @@
 import { useState } from "react";
+import type { UserProfile } from "../domain/accountTypes";
 import type { SessionUser } from "../services/authService";
 import { getSystemDiagnostics } from "../platform/systemDiagnostics";
 
 interface ProfilePageProps {
   user: SessionUser;
+  profile: UserProfile;
   mode: "local" | "cloud";
   notificationReady: boolean;
   onEnableNotifications: () => Promise<NotificationPermission>;
@@ -12,13 +14,12 @@ interface ProfilePageProps {
 
 export function ProfilePage({
   user,
+  profile,
   mode,
   notificationReady,
   onEnableNotifications,
   onSignOut
 }: ProfilePageProps) {
-  const friendCode =
-    user.id.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase() || "PREVIEW1";
   const diagnostics = getSystemDiagnostics();
   const [notificationStatus, setNotificationStatus] = useState<
     NotificationPermission | "unsupported" | "enabling"
@@ -53,7 +54,7 @@ export function ProfilePage({
       <section className="profile-grid">
         <article className="panel">
           <p className="eyebrow">Friend code</p>
-          <strong className="friend-code">{friendCode}</strong>
+          <strong className="friend-code">{profile.friendCode}</strong>
           <p className="muted">Share this code with people you know.</p>
         </article>
         <article className="panel">

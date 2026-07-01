@@ -60,6 +60,18 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: /Connect with Enzo/i })).toBeInTheDocument();
   });
 
+  it("shows the bootstrapped profile friend code on the profile page", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await enterPreview(user);
+
+    await user.click(
+      within(desktopNavigation()).getByRole("button", { name: "Profile" })
+    );
+
+    expect(screen.getByText("PREVIEW1")).toBeInTheDocument();
+  });
+
   it("asks for dinner friends before offering three bill sources", async () => {
     const user = userEvent.setup();
     await renderApp();

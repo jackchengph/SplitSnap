@@ -20,6 +20,7 @@ interface FriendCodeClaim {
 }
 
 const supportedTimezones = new Set(Intl.supportedValuesOf("timeZone"));
+const handlePattern = /^[a-z0-9_]{3,24}$/;
 
 function sanitizeBaseHandle(input: string): string {
   const normalized = input
@@ -72,6 +73,71 @@ function readTimezone(body: unknown): string {
   return timezone;
 }
 
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function readPhotoURL(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function readExistingTimezone(value: unknown): string | null {
+  return typeof value === "string" && supportedTimezones.has(value) ? value : null;
+}
+
+function isClaimAvailable(
+  claim: HandleClaim | FriendCodeClaim | undefined,
+  exists: boolean,
+  uid: string
+): boolean {
+  return !exists || claim?.userId === uid;
+}
+
+function isCompleteProfile(profile: unknown): profile is UserProfile {
+  if (!profile || typeof profile !== "object") {
+    return false;
+  }
+
+  const record = profile as Record<string, unknown>;
+  return (
+    typeof record.id === "string" &&
+    typeof record.displayName === "string" &&
+    (typeof record.photoURL === "string" || record.photoURL === null) &&
+    typeof record.handle === "string" &&
+    handlePattern.test(record.handle) &&
+    typeof record.friendCode === "string" &&
+    record.friendCode.length === 8 &&
+    typeof record.discoverableByHandle === "boolean" &&
+    typeof record.timezone === "string" &&
+    supportedTimezones.has(record.timezone) &&
+    typeof record.createdAt === "string" &&
+    typeof record.updatedAt === "string"
+  );
+}
+
+function createPublicProfile(profile: UserProfile) {
+  return {
+    id: profile.id,
+    displayName: profile.displayName,
+    photoURL: profile.photoURL,
+    handle: profile.handle
+  };
+}
+
+function matchesPublicProfile(profile: UserProfile, publicProfile: unknown): boolean {
+  if (!publicProfile || typeof publicProfile !== "object") {
+    return false;
+  }
+
+  const record = publicProfile as Record<string, unknown>;
+  return (
+    record.id === profile.id &&
+    record.displayName === profile.displayName &&
+    record.photoURL === profile.photoURL &&
+    record.handle === profile.handle
+  );
+}
+
 function createProfile(input: {
   uid: string;
   displayName: string;
@@ -79,7 +145,9 @@ function createProfile(input: {
   handle: string;
   friendCode: string;
   timezone: string;
-  now: string;
+  discoverableByHandle: boolean;
+  createdAt: string;
+  updatedAt: string;
 }): UserProfile {
   return {
     id: input.uid,
@@ -87,10 +155,10 @@ function createProfile(input: {
     photoURL: input.photoURL,
     handle: input.handle,
     friendCode: input.friendCode,
-    discoverableByHandle: true,
+    discoverableByHandle: input.discoverableByHandle,
     timezone: input.timezone,
-    createdAt: input.now,
-    updatedAt: input.now
+    createdAt: input.createdAt,
+    updatedAt: input.updatedAt
   };
 }
 
@@ -104,32 +172,66 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     const timezone = readTimezone(request.body);
     const uid = await requireUserId(request);
     const firestore = adminFirestore();
-    const existingProfileSnapshot = await firestore.doc(`users/${uid}`).get();
-    if (existingProfileSnapshot.exists) {
-      response.status(200).json(existingProfileSnapshot.data());
-      return;
-    }
-
-    const authUser = await adminAuth().getUser(uid);
-    const displayName =
-      authUser.displayName || authUser.email?.split("@")[0] || "SplitSnap user";
-    const baseHandle = sanitizeBaseHandle(displayName || authUser.email || uid);
-    const now = new Date().toISOString();
+    const userRef = firestore.doc(`users/${uid}`);
+    const publicProfileRef = firestore.doc(`publicProfiles/${uid}`);
 
     const createdProfile = await firestore.runTransaction<UserProfile>(
       async (transaction) => {
-        const userRef = firestore.doc(`users/${uid}`);
         const existingUser = await transaction.get(userRef);
-        if (existingUser.exists) {
-          return existingUser.data() as UserProfile;
+        const existingData = existingUser.data() as Record<string, unknown> | undefined;
+
+        if (isCompleteProfile(existingData)) {
+          const handleSnapshot = await transaction.get(
+            firestore.doc(`handles/${existingData.handle}`)
+          );
+          const friendCodeSnapshot = await transaction.get(
+            firestore.doc(`friendCodes/${existingData.friendCode}`)
+          );
+          const publicProfileSnapshot = await transaction.get(publicProfileRef);
+
+          if (
+            isClaimAvailable(
+              handleSnapshot.data() as HandleClaim | undefined,
+              handleSnapshot.exists,
+              uid
+            ) &&
+            isClaimAvailable(
+              friendCodeSnapshot.data() as FriendCodeClaim | undefined,
+              friendCodeSnapshot.exists,
+              uid
+            ) &&
+            matchesPublicProfile(existingData, publicProfileSnapshot.data())
+          ) {
+            return existingData;
+          }
         }
 
+        const authUser = await adminAuth().getUser(uid);
+        const displayName =
+          readString(existingData?.displayName) ||
+          authUser.displayName ||
+          authUser.email?.split("@")[0] ||
+          "SplitSnap user";
+        const photoURL = readPhotoURL(existingData?.photoURL) ?? authUser.photoURL ?? null;
+        const baseHandle = sanitizeBaseHandle(displayName || authUser.email || uid);
+
+        const handleOptions = [
+          readString(existingData?.handle),
+          ...handleCandidates(baseHandle)
+        ].filter((candidate, index, candidates): candidate is string => {
+          return (
+            typeof candidate === "string" &&
+            handlePattern.test(candidate) &&
+            candidates.indexOf(candidate) === index
+          );
+        });
+
         let claimedHandle = "";
-        for (const candidate of handleCandidates(baseHandle)) {
+        for (const candidate of handleOptions) {
           const handleRef = firestore.doc(`handles/${candidate}`);
           const snapshot = await transaction.get(handleRef);
-          const ownerId = (snapshot.data() as HandleClaim | undefined)?.userId;
-          if (!snapshot.exists || ownerId === uid) {
+          const claim = snapshot.data() as HandleClaim | undefined;
+          if (isClaimAvailable(claim, snapshot.exists, uid)) {
             claimedHandle = candidate;
             transaction.set(handleRef, { userId: uid });
             break;
@@ -139,13 +241,23 @@ export default async function handler(request: ApiRequest, response: ApiResponse
           throw new Error("No handle is currently available.");
         }
 
+        const friendCodeOptions = [
+          readString(existingData?.friendCode),
+          ...Array.from({ length: 100 }, (_, suffix) => friendCodeCandidate(uid, suffix))
+        ].filter((candidate, index, candidates): candidate is string => {
+          return (
+            typeof candidate === "string" &&
+            candidate.length === 8 &&
+            candidates.indexOf(candidate) === index
+          );
+        });
+
         let claimedFriendCode = "";
-        for (let suffix = 0; suffix < 100; suffix += 1) {
-          const candidate = friendCodeCandidate(uid, suffix);
+        for (const candidate of friendCodeOptions) {
           const friendCodeRef = firestore.doc(`friendCodes/${candidate}`);
           const snapshot = await transaction.get(friendCodeRef);
-          const ownerId = (snapshot.data() as FriendCodeClaim | undefined)?.userId;
-          if (!snapshot.exists || ownerId === uid) {
+          const claim = snapshot.data() as FriendCodeClaim | undefined;
+          if (isClaimAvailable(claim, snapshot.exists, uid)) {
             claimedFriendCode = candidate;
             transaction.set(friendCodeRef, { userId: uid });
             break;
@@ -155,22 +267,23 @@ export default async function handler(request: ApiRequest, response: ApiResponse
           throw new Error("No friend code is currently available.");
         }
 
+        const now = new Date().toISOString();
         const profile = createProfile({
           uid,
           displayName,
-          photoURL: authUser.photoURL || null,
+          photoURL,
           handle: claimedHandle,
           friendCode: claimedFriendCode,
-          timezone,
-          now
+          timezone: readExistingTimezone(existingData?.timezone) ?? timezone,
+          discoverableByHandle:
+            typeof existingData?.discoverableByHandle === "boolean"
+              ? existingData.discoverableByHandle
+              : true,
+          createdAt: readString(existingData?.createdAt) ?? now,
+          updatedAt: now
         });
         transaction.set(userRef, profile);
-        transaction.set(firestore.doc(`publicProfiles/${uid}`), {
-          id: profile.id,
-          displayName: profile.displayName,
-          photoURL: profile.photoURL,
-          handle: profile.handle
-        });
+        transaction.set(publicProfileRef, createPublicProfile(profile));
         return profile;
       }
     );
