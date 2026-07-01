@@ -45,17 +45,25 @@ export function SplitSnapApp() {
     (result) => result.participantId === state.activeParticipantId
   );
 
-  if (session.status === "loading") {
+  if (
+    session.status === "loading" ||
+    (session.status === "authenticated" && session.profileStatus === "loading")
+  ) {
     return <main className="loading-shell">Opening SplitSnap...</main>;
   }
 
-  if (session.status === "signed-out") {
+  if (session.status === "signed-out" || session.profileStatus === "error") {
     return (
       <SignInScreen
         error={session.error}
-        localPreview={session.mode === "local"}
+        mode={session.mode}
         onSignIn={() => void session.signIn()}
         onLocalPreview={session.enterLocalPreview}
+        onRetryProfile={
+          session.profileStatus === "error"
+            ? () => void session.retryProfile()
+            : undefined
+        }
       />
     );
   }
@@ -201,10 +209,11 @@ export function SplitSnapApp() {
       />
     );
   } else if (currentPage === "profile") {
+    const authenticatedMode = session.mode === "local" ? "local" : "cloud";
     content = (
       <ProfilePage
         user={session.user!}
-        mode={session.mode}
+        mode={authenticatedMode}
         notificationReady={
           session.mode === "cloud" &&
           Boolean(import.meta.env.VITE_FIREBASE_VAPID_KEY)
@@ -244,7 +253,7 @@ export function SplitSnapApp() {
     <AppShell
       currentPage={currentPage}
       userName={session.user?.displayName ?? "SplitSnap user"}
-      sessionMode={session.mode}
+      sessionMode={session.mode === "local" ? "local" : "cloud"}
       onNavigate={navigate}
     >
       {content}
@@ -252,9 +261,18 @@ export function SplitSnapApp() {
   );
 }
 
-export default function App() {
+interface AppProps {
+  allowLocalPreview?: boolean;
+}
+
+export default function App({
+  allowLocalPreview = import.meta.env.DEV
+}: AppProps) {
   return (
-    <SessionProvider cloudConfigured={firebaseRuntime.configured}>
+    <SessionProvider
+      cloudConfigured={firebaseRuntime.configured}
+      allowLocalPreview={allowLocalPreview}
+    >
       <SplitSnapApp />
     </SessionProvider>
   );

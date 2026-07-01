@@ -1,7 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import App from "./App";
 
 async function enterPreview(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
@@ -18,9 +17,14 @@ async function selectDinnerFriend(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /Next: add the bill/i }));
 }
 
+async function renderApp(props?: { allowLocalPreview?: boolean }) {
+  const module = await import("./App");
+  render(<module.default {...props} />);
+}
+
 describe("App", () => {
-  it("shows a welcome screen before entering local preview", () => {
-    render(<App />);
+  it("shows a welcome screen before entering local preview", async () => {
+    await renderApp();
 
     expect(
       screen.getByRole("heading", { name: /Split every dinner/i })
@@ -32,7 +36,7 @@ describe("App", () => {
 
   it("lands on a unified home without asking for a global role", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderApp();
     await enterPreview(user);
 
     expect(
@@ -45,7 +49,7 @@ describe("App", () => {
 
   it("navigates to the dedicated friends page", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderApp();
     await enterPreview(user);
 
     await user.click(
@@ -58,7 +62,7 @@ describe("App", () => {
 
   it("asks for dinner friends before offering three bill sources", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderApp();
     await enterPreview(user);
 
     await user.click(screen.getByRole("button", { name: /Start a split/i }));
@@ -79,7 +83,7 @@ describe("App", () => {
 
   it("builds a split from a restaurant menu checklist", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderApp();
     await enterPreview(user);
     await user.click(screen.getByRole("button", { name: /Start a split/i }));
     await selectDinnerFriend(user);
@@ -97,7 +101,7 @@ describe("App", () => {
 
   it("keeps receipt scanning as an alternative source", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderApp();
     await enterPreview(user);
     await user.click(screen.getByRole("button", { name: /Start a split/i }));
     await selectDinnerFriend(user);
@@ -112,7 +116,7 @@ describe("App", () => {
 
   it("opens a participant breakdown from Activity and validates proof", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderApp();
     await enterPreview(user);
     await user.click(
       within(desktopNavigation()).getByRole("button", { name: "Activity" })
@@ -126,5 +130,16 @@ describe("App", () => {
 
     expect(screen.getByText(/Payment verified/i)).toBeInTheDocument();
     expect(screen.getByText(/Status: paid/i)).toBeInTheDocument();
+  });
+
+  it("hides local preview when the app runs in production mode without Firebase", async () => {
+    await renderApp({ allowLocalPreview: false });
+
+    expect(
+      screen.getByText(/Add Firebase settings to enable Google sign-in/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Continue in local preview/i })
+    ).not.toBeInTheDocument();
   });
 });

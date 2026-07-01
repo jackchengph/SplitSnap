@@ -17,6 +17,7 @@ export interface SessionUser {
 
 export interface AuthAdapter {
   observeSession: (listener: (user: SessionUser | null) => void) => () => void;
+  getIdToken: () => Promise<string>;
   signInWithGoogle: () => Promise<void>;
   signOutUser: () => Promise<void>;
 }
@@ -55,8 +56,17 @@ export async function signOutUser(): Promise<void> {
   await signOut(requireAuth());
 }
 
+export async function getIdToken(): Promise<string> {
+  const currentUser = requireAuth().currentUser;
+  if (!currentUser) {
+    throw new Error("Sign in before continuing.");
+  }
+  return currentUser.getIdToken();
+}
+
 export const firebaseAuthAdapter: AuthAdapter = {
   observeSession,
+  getIdToken,
   signInWithGoogle,
   signOutUser
 };
