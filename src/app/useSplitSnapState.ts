@@ -50,12 +50,45 @@ interface StoredWorkspace {
 
 interface SplitSnapStateOptions {
   storage?: Storage;
+  parseReceipt?: typeof parseCapturedReceipt;
 }
 
 function buildGroup(participantIds: string[]): DinnerGroup {
   return {
     ...demoGroup,
     participantIds
+  };
+}
+
+function buildCaptureRecoveryReceipt(
+  imageDataUrl: string,
+  participantIds: string[],
+  warning: string
+): Receipt {
+  return {
+    id: `receipt-${Date.now()}`,
+    merchantName: "Scanned receipt",
+    date: new Date().toISOString().slice(0, 10),
+    imageUrl: imageDataUrl,
+    ocrConfidence: 0,
+    parserMode: "camera-ocr",
+    parseStatus: "Needs manual review",
+    parseWarnings: [warning],
+    items: [
+      {
+        id: "unrecognized-item-1",
+        name: "Unrecognized item",
+        quantity: 1,
+        price: 0,
+        assignedParticipantIds: participantIds,
+        confidence: 0,
+        parseSource: "ocr",
+        needsReview: true
+      }
+    ],
+    tax: 0,
+    serviceCharge: 0,
+    total: 0
   };
 }
 
@@ -242,21 +275,44 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     setCapturedReceiptImageUrl(imageDataUrl);
 
     const participantIds = activeGroup.participantIds;
-    const parsed = await parseCapturedReceipt({ imageDataUrl, participantIds });
+    setParseStatus("OCR reading items");
 
-    setReceipt(parsed.receipt);
-    setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");
-    setParseWarnings(parsed.warnings);
-    setNotifications(
-      createExpenseNotifications({
-        expenseId,
-        payerName: "Maya",
-        dinnerName: activeGroup.name,
-        results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
-        createdAt: new Date().toISOString()
-      })
-    );
-    setPayerStep("review");
+    try {
+      const parseReceipt = options.parseReceipt ?? parseCapturedReceipt;
+      const parsed = await parseReceipt({ imageDataUrl, participantIds });
+      const hasPositivePriceItem = parsed.receipt.items.some((item) => item.price > 0);
+
+      setReceipt(parsed.receipt);
+      setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");
+      setParseWarnings(parsed.warnings);
+      setNotifications(
+        hasPositivePriceItem
+          ? createExpenseNotifications({
+              expenseId,
+              payerName: "Maya",
+              dinnerName: activeGroup.name,
+              results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
+              createdAt: new Date().toISOString()
+            })
+          : []
+      );
+    } catch (error) {
+      const warning = `Receipt parsing failed: ${
+        error instanceof Error ? error.message : "Unknown parser error."
+      }`;
+      const recoveryReceipt = buildCaptureRecoveryReceipt(
+        imageDataUrl,
+        participantIds,
+        warning
+      );
+
+      setReceipt(recoveryReceipt);
+      setParseStatus("Needs manual review");
+      setParseWarnings([warning]);
+      setNotifications([]);
+    } finally {
+      setPayerStep("review");
+    }
   }
 
   function toggleItemParticipant(itemId: string, participantId: string) {
@@ -391,21 +447,22 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
   }
 
   function simulateUpload(fileName: string) {
-    setReceipt((current) => ({
-      ...current,
-      parserMode: "simulated-upload",
+    const warning = "Uploaded receipt has not been OCR processed. Enter item details manually.";
+    const recoveryReceipt = buildCaptureRecoveryReceipt(
+      "",
+      activeGroup.participantIds,
+      warning
+    );
+
+    setReceipt({
+      ...recoveryReceipt,
+      id: `upload-${Date.now()}`,
       merchantName: fileName.replace(/\.[^.]+$/, "") || "Uploaded receipt",
-      ocrConfidence: 0.62,
-      parseStatus: "Needs manual review",
-      parseWarnings: ["Uploaded receipt image needs OCR and YOLO-style fallback review."],
-      items: current.items.map((item) =>
-        item.confidence < 0.85
-          ? { ...item, parseSource: "manual", needsReview: true, confidence: Math.min(item.confidence, 0.62) }
-          : item
-      )
-    }));
+      parserMode: "manual"
+    });
     setParseStatus("Needs manual review");
-    setParseWarnings(["Uploaded receipt image needs OCR and YOLO-style fallback review."]);
+    setParseWarnings([warning]);
+    setNotifications([]);
   }
 
   return {

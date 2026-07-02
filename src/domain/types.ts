@@ -59,6 +59,7 @@ export interface Receipt {
   parserMode:
     | "sample"
     | "simulated-upload"
+    | "camera-ocr"
     | "camera-ocr-yolo"
     | "restaurant-menu"
     | "manual";

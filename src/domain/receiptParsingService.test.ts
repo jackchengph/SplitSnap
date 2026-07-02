@@ -1,91 +1,145 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { PreparedReceiptImage } from "../services/receiptImagePreprocessor";
+import type { OcrRecognition } from "../services/receiptOcrEngine";
 import {
-  analyzeLowConfidenceRegions,
-  buildManualReviewItems,
-  ocrParseReceipt,
-  parseCapturedReceipt
+  parseCapturedReceipt,
+  type ReceiptParsingDependencies
 } from "./receiptParsingService";
 
 const receiptImage = "data:image/png;base64,receipt-scan";
 
+function createDependencies(
+  variants: PreparedReceiptImage[],
+  recognize: (imageDataUrl: string) => Promise<OcrRecognition>
+): ReceiptParsingDependencies {
+  return {
+    prepareReceiptImages: vi.fn().mockResolvedValue(variants),
+    recognizeReceiptImage: vi.fn(recognize)
+  };
+}
+
 describe("receiptParsingService", () => {
-  it("keeps high-confidence OCR rows ready for review", () => {
-    const items = ocrParseReceipt({ imageDataUrl: receiptImage, participantIds: ["maya", "nico"] });
+  it("chooses the preprocessing candidate with the strongest structured parse", async () => {
+    let activeRecognitions = 0;
+    let maximumActiveRecognitions = 0;
+    const recognitionOrder: string[] = [];
+    const dependencies = createDependencies(
+      [
+        { name: "original", imageDataUrl: "original-image" },
+        { name: "high-contrast", imageDataUrl: "contrast-image" }
+      ],
+      async (imageDataUrl) => {
+        recognitionOrder.push(imageDataUrl);
+        activeRecognitions += 1;
+        maximumActiveRecognitions = Math.max(maximumActiveRecognitions, activeRecognitions);
+        await Promise.resolve();
+        activeRecognitions -= 1;
 
-    expect(items.find((item) => item.id === "sushi-platter")).toMatchObject({
-      parseSource: "ocr",
-      needsReview: false
-    });
-  });
-
-  it("passes low-confidence OCR rows through the YOLO-style fallback", () => {
-    const ocrItems = ocrParseReceipt({ imageDataUrl: receiptImage, participantIds: ["maya", "nico"] });
-    const recovered = analyzeLowConfidenceRegions(ocrItems);
-
-    expect(recovered.find((item) => item.id === "drinks")).toMatchObject({
-      parseSource: "yolo",
-      needsReview: false
-    });
-  });
-
-  it("marks unresolved fallback rows for manual review", () => {
-    const ocrItems = ocrParseReceipt({ imageDataUrl: receiptImage, participantIds: ["maya", "nico"] });
-    const recovered = analyzeLowConfidenceRegions(ocrItems);
-    const manualReady = buildManualReviewItems(recovered);
-
-    expect(manualReady.find((item) => item.id === "dessert")).toMatchObject({
-      parseSource: "manual",
-      needsReview: true
-    });
-  });
-
-  it("turns high-confidence Tesseract text into parsed receipt items", async () => {
-    const result = await parseCapturedReceipt({
-      imageDataUrl: receiptImage,
-      participantIds: ["maya", "nico"],
-      ocrAttempt: {
-        engine: "tesseract",
-        confidence: 0.91,
-        text: ["Cafe Luna", "Americano 120.00", "Croissant 180.00", "TOTAL 300.00"].join("\n")
+        return imageDataUrl === "original-image"
+          ? { text: "blur", confidence: 0.99, lines: [] }
+          : {
+              text: "CAFE\nLatte 160.00\nTOTAL 160.00",
+              confidence: 0.91,
+              lines: []
+            };
       }
-    });
+    );
 
-    expect(result.receipt.merchantName).toBe("Cafe Luna");
-    expect(result.receipt.items.map((item) => item.name)).toEqual(["Americano", "Croissant"]);
-    expect(result.receipt.total).toBe(300);
-    expect(result.receipt.items.every((item) => item.parseSource === "ocr")).toBe(true);
+    const result = await parseCapturedReceipt(
+      { imageDataUrl: receiptImage, participantIds: ["maya", "nico"] },
+      dependencies
+    );
+
+    expect(result.receipt.items).toMatchObject([
+      { name: "Latte", price: 160, needsReview: false }
+    ]);
+    expect(recognitionOrder).toEqual(["original-image", "contrast-image"]);
+    expect(maximumActiveRecognitions).toBe(1);
   });
 
-  it("falls back to YOLO/manual review when Tesseract confidence is low", async () => {
-    const result = await parseCapturedReceipt({
-      imageDataUrl: receiptImage,
-      participantIds: ["maya", "nico"],
-      ocrAttempt: {
-        engine: "tesseract",
-        confidence: 0.23,
-        text: "blurry words maybe 12 ??"
-      }
+  it("preserves structured summary fields and the captured source image", async () => {
+    const dependencies = createDependencies(
+      [{ name: "grayscale", imageDataUrl: "processed-image" }],
+      async () => ({
+        text: [
+          "Cafe Luna",
+          "Americano 120.00",
+          "Croissant 180.00",
+          "SUBTOTAL 300.00",
+          "VAT 36.00",
+          "SERVICE CHARGE 24.00",
+          "TOTAL 360.00"
+        ].join("\n"),
+        confidence: 0.94,
+        lines: []
+      })
+    );
+
+    const result = await parseCapturedReceipt(
+      { imageDataUrl: receiptImage, participantIds: ["maya"] },
+      dependencies
+    );
+
+    expect(result.receipt).toMatchObject({
+      merchantName: "Cafe Luna",
+      imageUrl: receiptImage,
+      parserMode: "camera-ocr",
+      tax: 36,
+      serviceCharge: 24,
+      total: 360,
+      parseStatus: "Ready to split"
     });
-
-    expect(result.receipt.items.some((item) => item.parseSource === "yolo")).toBe(true);
-    expect(result.receipt.items.some((item) => item.parseSource === "manual")).toBe(true);
-    expect(result.warnings.some((warning) => warning.includes("Tesseract OCR confidence was low"))).toBe(true);
-  });
-
-  it("returns a parsed receipt with status history, warning text, and the captured image", async () => {
-    const result = await parseCapturedReceipt({
-      imageDataUrl: receiptImage,
-      participantIds: ["maya", "nico", "bea"]
-    });
-
     expect(result.statuses).toEqual([
       "Scanning receipt",
       "OCR reading items",
-      "Checking unclear areas",
-      "Needs manual review",
       "Ready to split"
     ]);
+  });
+
+  it("never substitutes demo items after OCR failure", async () => {
+    const dependencies = createDependencies(
+      [
+        { name: "original", imageDataUrl: "original-image" },
+        { name: "high-contrast", imageDataUrl: "contrast-image" }
+      ],
+      async () => {
+        throw new Error("worker unavailable");
+      }
+    );
+
+    const result = await parseCapturedReceipt(
+      { imageDataUrl: receiptImage, participantIds: ["maya", "nico"] },
+      dependencies
+    );
+
+    expect(result.receipt.items).toMatchObject([
+      { name: "Unrecognized item", price: 0, needsReview: true }
+    ]);
+    expect(result.receipt.items.some((item) => item.name === "Sushi platter")).toBe(false);
     expect(result.receipt.imageUrl).toBe(receiptImage);
-    expect(result.warnings.some((warning) => warning.includes("manual review"))).toBe(true);
+    expect(result.receipt.parseStatus).toBe("Needs manual review");
+    expect(result.warnings).toContainEqual(expect.stringMatching(/worker unavailable/i));
+  });
+
+  it("returns editable manual recovery when preprocessing itself fails", async () => {
+    const dependencies: ReceiptParsingDependencies = {
+      prepareReceiptImages: vi.fn().mockRejectedValue(new Error("canvas exploded")),
+      recognizeReceiptImage: vi.fn()
+    };
+
+    const result = await parseCapturedReceipt(
+      { imageDataUrl: receiptImage, participantIds: ["maya"] },
+      dependencies
+    );
+
+    expect(dependencies.recognizeReceiptImage).not.toHaveBeenCalled();
+    expect(result.receipt.items[0]).toMatchObject({
+      name: "Unrecognized item",
+      price: 0,
+      assignedParticipantIds: ["maya"],
+      parseSource: "ocr",
+      needsReview: true
+    });
+    expect(result.warnings).toContainEqual(expect.stringMatching(/canvas exploded/i));
   });
 });

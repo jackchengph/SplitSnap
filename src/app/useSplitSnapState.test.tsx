@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ParseReceiptResult } from "../domain/receiptParsingService";
 import { useSplitSnapState } from "./useSplitSnapState";
 
 describe("useSplitSnapState", () => {
@@ -79,7 +80,36 @@ describe("useSplitSnapState", () => {
   });
 
   it("stores a captured receipt image, parses it, and moves to review", async () => {
-    const { result } = renderHook(() => useSplitSnapState());
+    const parseReceipt = vi.fn().mockResolvedValue({
+      receipt: {
+        id: "receipt-cafe",
+        merchantName: "Cafe Luna",
+        date: "2026-07-02",
+        imageUrl: "data:image/png;base64,scan",
+        ocrConfidence: 0.91,
+        parserMode: "camera-ocr",
+        parseStatus: "Ready to split",
+        parseWarnings: [],
+        items: [
+          {
+            id: "latte-1",
+            name: "Latte",
+            quantity: 1,
+            price: 160,
+            assignedParticipantIds: ["maya", "nico"],
+            confidence: 0.91,
+            parseSource: "ocr",
+            needsReview: false
+          }
+        ],
+        tax: 0,
+        serviceCharge: 0,
+        total: 160
+      },
+      statuses: ["Scanning receipt", "OCR reading items", "Ready to split"],
+      warnings: []
+    } satisfies ParseReceiptResult);
+    const { result } = renderHook(() => useSplitSnapState({ parseReceipt }));
 
     act(() => {
       result.current.toggleDinnerFriend("nico");
@@ -92,7 +122,105 @@ describe("useSplitSnapState", () => {
     expect(result.current.payerStep).toBe("review");
     expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,scan");
     expect(result.current.parseStatus).toBe("Ready to split");
-    expect(result.current.receipt.items.some((item) => item.needsReview)).toBe(true);
+    expect(result.current.receipt.items).toMatchObject([{ name: "Latte", price: 160 }]);
+    expect(result.current.notifications.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a failed capture editable without creating zero-value expense notifications", async () => {
+    const parseReceipt = vi.fn().mockResolvedValue({
+      receipt: {
+        id: "receipt-manual-review",
+        merchantName: "Scanned receipt",
+        date: "2026-07-02",
+        imageUrl: "data:image/png;base64,failed-scan",
+        ocrConfidence: 0,
+        parserMode: "camera-ocr",
+        parseStatus: "Needs manual review",
+        parseWarnings: ["worker unavailable"],
+        items: [
+          {
+            id: "unrecognized-item-1",
+            name: "Unrecognized item",
+            quantity: 1,
+            price: 0,
+            assignedParticipantIds: ["maya", "nico", "bea"],
+            confidence: 0,
+            parseSource: "ocr",
+            needsReview: true
+          }
+        ],
+        tax: 0,
+        serviceCharge: 0,
+        total: 0
+      },
+      statuses: ["Scanning receipt", "OCR reading items", "Needs manual review"],
+      warnings: ["worker unavailable"]
+    } satisfies ParseReceiptResult);
+    const { result } = renderHook(() => useSplitSnapState({ parseReceipt }));
+
+    await act(async () => {
+      await result.current.captureReceipt("data:image/png;base64,failed-scan");
+    });
+
+    expect(result.current.payerStep).toBe("review");
+    expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,failed-scan");
+    expect(result.current.receipt.items[0]).toMatchObject({
+      name: "Unrecognized item",
+      price: 0,
+      needsReview: true
+    });
+    expect(result.current.notifications).toEqual([]);
+  });
+
+  it("preserves the captured image and reaches review when parsing rejects unexpectedly", async () => {
+    let rejectParsing: (error: Error) => void = () => undefined;
+    const parseReceipt = vi.fn().mockImplementation(
+      () =>
+        new Promise<ParseReceiptResult>((_resolve, reject) => {
+          rejectParsing = reject;
+        })
+    );
+    const { result } = renderHook(() => useSplitSnapState({ parseReceipt }));
+    let capture: Promise<void> | undefined;
+
+    act(() => {
+      capture = result.current.captureReceipt("data:image/png;base64,rejected-scan");
+    });
+
+    expect(result.current.payerStep).toBe("parsing");
+    expect(result.current.parseStatus).toBe("OCR reading items");
+    expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,rejected-scan");
+
+    await act(async () => {
+      rejectParsing(new Error("unexpected parser failure"));
+      await expect(capture).resolves.toBeUndefined();
+    });
+
+    expect(result.current.payerStep).toBe("review");
+    expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,rejected-scan");
+    expect(result.current.receipt.items[0]).toMatchObject({
+      name: "Unrecognized item",
+      price: 0,
+      needsReview: true
+    });
+    expect(result.current.parseWarnings).toContainEqual(
+      expect.stringMatching(/unexpected parser failure/i)
+    );
+    expect(result.current.notifications).toEqual([]);
+  });
+
+  it("does not substitute demo rows for an upload that has not been OCR processed", () => {
+    const { result } = renderHook(() => useSplitSnapState());
+
+    act(() => {
+      result.current.simulateUpload("unread-receipt.jpg");
+    });
+
+    expect(result.current.receipt.items).toMatchObject([
+      { name: "Unrecognized item", price: 0, needsReview: true }
+    ]);
+    expect(result.current.receipt.items.some((item) => item.name === "Sushi platter")).toBe(false);
+    expect(result.current.parseWarnings.join(" ")).not.toMatch(/yolo/i);
   });
 
   it("creates a reminder and marks participant reminded", () => {
