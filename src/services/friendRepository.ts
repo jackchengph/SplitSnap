@@ -4,7 +4,6 @@ import {
   getDoc,
   onSnapshot,
   query,
-  runTransaction,
   serverTimestamp,
   Timestamp,
   updateDoc,
@@ -22,6 +21,8 @@ import {
   friendshipIdFor
 } from "../domain/friendship";
 import { firebaseRuntime } from "../platform/firebase";
+import { getIdToken } from "./authService";
+import { createFriendRequest } from "./friendRequestService";
 
 export interface FriendListEntry {
   profile: PublicUserProfile;
@@ -47,7 +48,7 @@ interface FriendGateway {
   getPublicProfile(userId: string): Promise<PublicUserProfile | null>;
   getUserIdByCode(code: string): Promise<string | null>;
   getUserIdByHandle(handle: string): Promise<string | null>;
-  createRequest(friendship: Friendship): Promise<void>;
+  createRequest(targetUserId: string): Promise<void>;
   updateStatus(
     id: string,
     status: FriendshipStatus,
@@ -89,18 +90,6 @@ function readFriendship(id: string, data: DocumentData): Friendship {
   };
 }
 
-function writeFriendship(friendship: Friendship): DocumentData {
-  return {
-    memberKey: friendship.memberKey,
-    memberIds: friendship.memberIds,
-    requestedBy: friendship.requestedBy,
-    status: friendship.status,
-    blockedBy: friendship.blockedBy,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-}
-
 function createFirebaseFriendGateway(): FriendGateway {
   const firestore = requireFirestore();
 
@@ -123,15 +112,9 @@ function createFirebaseFriendGateway(): FriendGateway {
     getUserIdByHandle(handle) {
       return getUserId("handles", handle);
     },
-    async createRequest(friendship) {
-      const reference = doc(firestore, "friendships", friendship.id);
-      await runTransaction(firestore, async (transaction) => {
-        const existing = await transaction.get(reference);
-        if (existing.exists()) {
-          throw new Error("A friendship already exists for these users.");
-        }
-        transaction.set(reference, writeFriendship(friendship));
-      });
+    async createRequest(targetUserId) {
+      const idToken = await getIdToken();
+      await createFriendRequest(idToken, targetUserId);
     },
     async updateStatus(id, status, blockedBy) {
       await updateDoc(doc(firestore, "friendships", id), {
@@ -220,7 +203,7 @@ export function createFriendRepository(
           existing.requestedBy === currentUserId &&
           canTransitionFriendship(existing.status, "pending", "requester");
         if (canRenew) {
-          await updateMembershipStatus(existing, "pending", null);
+          await gateway.createRequest(targetUserId);
           return;
         }
         if (
@@ -232,18 +215,7 @@ export function createFriendRepository(
         throw new Error("This friendship cannot be requested in its current state.");
       }
 
-      const memberIds = [currentUserId, targetUserId].sort() as [string, string];
-      const now = new Date().toISOString();
-      await gateway.createRequest({
-        id,
-        memberKey: id,
-        memberIds,
-        requestedBy: currentUserId,
-        status: "pending",
-        blockedBy: null,
-        createdAt: now,
-        updatedAt: now
-      });
+      await gateway.createRequest(targetUserId);
     },
     async acceptFriend(friendshipId) {
       const friendship = requireMembership(friendshipId);

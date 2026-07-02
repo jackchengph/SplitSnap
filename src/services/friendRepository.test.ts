@@ -115,27 +115,18 @@ describe("friend repository", () => {
     expect(gateway.createRequest).not.toHaveBeenCalled();
   });
 
-  it("writes a canonical pending request with the current user as immutable requester", async () => {
+  it("delegates fresh requests to the authenticated request gateway", async () => {
     const { gateway } = createGateway();
     const repository = createFriendRepository("maya", gateway);
 
     await repository.requestFriend("nico");
 
     expect(gateway.createRequest).toHaveBeenCalledOnce();
-    expect(gateway.createRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "maya__nico",
-        memberKey: "maya__nico",
-        memberIds: ["maya", "nico"],
-        requestedBy: "maya",
-        status: "pending",
-        blockedBy: null
-      })
-    );
+    expect(gateway.createRequest).toHaveBeenCalledWith("nico");
   });
 
   it.each(["declined", "removed"] as const)(
-    "lets the original requester renew a %s relationship without creating a document",
+    "delegates an original requester's %s renewal to the request endpoint",
     async (status) => {
       const existing = friendship(status);
       const { gateway, emit } = createGateway();
@@ -145,8 +136,8 @@ describe("friend repository", () => {
 
       await repository.requestFriend("nico");
 
-      expect(gateway.updateStatus).toHaveBeenCalledWith(existing.id, "pending", null);
-      expect(gateway.createRequest).not.toHaveBeenCalled();
+      expect(gateway.createRequest).toHaveBeenCalledWith("nico");
+      expect(gateway.updateStatus).not.toHaveBeenCalled();
     }
   );
 

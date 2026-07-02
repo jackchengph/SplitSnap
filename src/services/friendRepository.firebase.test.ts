@@ -20,6 +20,10 @@ const firestoreMocks = vi.hoisted(() => {
   };
 });
 
+const authMocks = vi.hoisted(() => ({
+  getIdToken: vi.fn()
+}));
+
 vi.mock("firebase/firestore", () => {
   class Timestamp {
     static fromDate(date: Date) {
@@ -44,62 +48,82 @@ vi.mock("../platform/firebase", () => ({
   firebaseRuntime: { firestore: { kind: "firestore" } }
 }));
 
-import { createFriendRepository } from "./friendRepository";
+vi.mock("./authService", () => authMocks);
 
-function transactionWith(existing: boolean) {
-  return {
-    get: vi.fn(async () => ({ exists: () => existing })),
-    set: vi.fn(),
-    update: vi.fn()
-  };
-}
+import { createFriendRepository } from "./friendRepository";
 
 describe("Firebase friend gateway", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    authMocks.getIdToken.mockResolvedValue("cloud-token");
     firestoreMocks.getDoc.mockResolvedValue({ exists: () => false });
     firestoreMocks.setDoc.mockResolvedValue(undefined);
     firestoreMocks.updateDoc.mockResolvedValue(undefined);
   });
 
-  it("creates a fresh request transactionally with server timestamps", async () => {
-    const transaction = transactionWith(false);
-    firestoreMocks.runTransaction.mockImplementation(
-      async (_firestore: unknown, operation: (value: typeof transaction) => unknown) =>
-        operation(transaction)
-    );
+  it("creates a fresh request through the authenticated endpoint", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ friendshipId: "maya__nico", status: "pending" })
+    });
+    vi.stubGlobal("fetch", fetcher);
     const repository = createFriendRepository("maya");
 
     await repository.requestFriend("nico");
 
-    expect(transaction.get).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "friendships/maya__nico" })
-    );
-    expect(transaction.set).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "friendships/maya__nico" }),
-      expect.objectContaining({
-        createdAt: firestoreMocks.serverTimestampValue,
-        updatedAt: firestoreMocks.serverTimestampValue
-      })
-    );
+    expect(authMocks.getIdToken).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledWith("/api/friends/request", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer cloud-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ targetUserId: "nico" })
+    });
+    expect(firestoreMocks.runTransaction).not.toHaveBeenCalled();
     expect(firestoreMocks.setDoc).not.toHaveBeenCalled();
   });
 
-  it("does not stage a write when the transaction finds an existing request", async () => {
-    const transaction = transactionWith(true);
-    firestoreMocks.runTransaction.mockImplementation(
-      async (_firestore: unknown, operation: (value: typeof transaction) => unknown) =>
-        operation(transaction)
+  it("routes a known renewal through the endpoint instead of a client update", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ friendshipId: "maya__nico", status: "pending" })
+    });
+    vi.stubGlobal("fetch", fetcher);
+    let emitMemberships!: (snapshot: {
+      docs: Array<{ id: string; data: () => Record<string, unknown> }>;
+    }) => void;
+    firestoreMocks.onSnapshot.mockImplementation(
+      (_query: unknown, listener: typeof emitMemberships) => {
+        emitMemberships = listener;
+        return vi.fn();
+      }
     );
     const repository = createFriendRepository("maya");
+    repository.subscribe(vi.fn(), vi.fn());
+    emitMemberships({
+      docs: [
+        {
+          id: "maya__nico",
+          data: () => ({
+            memberKey: "maya__nico",
+            memberIds: ["maya", "nico"],
+            requestedBy: "maya",
+            status: "removed",
+            blockedBy: null,
+            createdAt: "2026-07-01T10:00:00.000Z",
+            updatedAt: "2026-07-01T10:00:00.000Z"
+          })
+        }
+      ]
+    });
 
-    await expect(repository.requestFriend("nico")).rejects.toThrow(
-      "A friendship already exists for these users."
-    );
+    await repository.requestFriend("nico");
 
-    expect(transaction.get).toHaveBeenCalledOnce();
-    expect(transaction.set).not.toHaveBeenCalled();
-    expect(firestoreMocks.setDoc).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(firestoreMocks.updateDoc).not.toHaveBeenCalled();
+    expect(firestoreMocks.runTransaction).not.toHaveBeenCalled();
   });
 
   it("uses a server timestamp for status updates", async () => {

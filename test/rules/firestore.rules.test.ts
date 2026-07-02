@@ -135,6 +135,26 @@ describe("profile authorization", () => {
     await assertFails(getDocs(collection(mayaDb, "publicProfiles")));
   });
 
+  it("returns missing exact discovery documents without granting malformed reads", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, "handles/malformed"), {
+        userId: "nico",
+        privateNote: "do not expose"
+      });
+      await setDoc(doc(database, "friendCodes/MALFORMED"), {
+        userId: 42
+      });
+    });
+    const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
+
+    await assertSucceeds(getDoc(doc(mayaDb, "publicProfiles/missing")));
+    await assertSucceeds(getDoc(doc(mayaDb, "handles/missing")));
+    await assertSucceeds(getDoc(doc(mayaDb, "friendCodes/MISSING1")));
+    await assertFails(getDoc(doc(mayaDb, "handles/malformed")));
+    await assertFails(getDoc(doc(mayaDb, "friendCodes/MALFORMED")));
+  });
+
   it("denies malformed public profiles that contain private fields", async () => {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "publicProfiles/leaky"), {
@@ -182,10 +202,10 @@ describe("profile authorization", () => {
 });
 
 describe("friendship authorization", () => {
-  it("allows a canonical pending request from its requester", async () => {
+  it("requires friendship creation to use the Admin request endpoint", async () => {
     const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
 
-    await assertSucceeds(
+    await assertFails(
       setDoc(
         doc(mayaDb, "friendships/maya__nico"),
         friendshipData("pending")
