@@ -36,11 +36,12 @@ describe("receiptParsingService", () => {
         activeRecognitions -= 1;
 
         return imageDataUrl === "original-image"
-          ? { text: "blur", confidence: 0.99, lines: [] }
+          ? { text: "blur", confidence: 0.99, lines: [], words: [] }
           : {
               text: "CAFE\nLatte 160.00\nTOTAL 160.00",
               confidence: 0.91,
-              lines: []
+              lines: [],
+              words: []
             };
       }
     );
@@ -71,7 +72,8 @@ describe("receiptParsingService", () => {
           "TOTAL 360.00"
         ].join("\n"),
         confidence: 0.94,
-        lines: []
+        lines: [],
+        words: []
       })
     );
 
