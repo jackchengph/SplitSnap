@@ -35,6 +35,7 @@ interface SessionProviderProps {
   children: ReactNode;
   cloudConfigured: boolean;
   allowLocalPreview: boolean;
+  autoEnterLocalPreview?: boolean;
   authAdapter?: AuthAdapter;
 }
 
@@ -63,6 +64,7 @@ export function SessionProvider({
   children,
   cloudConfigured,
   allowLocalPreview,
+  autoEnterLocalPreview = false,
   authAdapter = firebaseAuthAdapter
 }: SessionProviderProps) {
   const mode: SessionMode = cloudConfigured
@@ -70,14 +72,24 @@ export function SessionProvider({
     : allowLocalPreview
       ? "local"
       : "unconfigured";
+  const startsInLocalPreview =
+    !cloudConfigured && allowLocalPreview && autoEnterLocalPreview;
   const [user, setUser] = useState<SessionUser | null>(
-    null
+    startsInLocalPreview ? localUser : null
   );
   const [status, setStatus] = useState<SessionStatus>(
-    cloudConfigured ? "loading" : "signed-out"
+    cloudConfigured
+      ? "loading"
+      : startsInLocalPreview
+        ? "authenticated"
+        : "signed-out"
   );
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [profileStatus, setProfileStatus] = useState<ProfileStatus>("idle");
+  const [profile, setProfile] = useState<UserProfile | null>(
+    startsInLocalPreview ? localProfile : null
+  );
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus>(
+    startsInLocalPreview ? "ready" : "idle"
+  );
   const [error, setError] = useState("");
 
   useEffect(() => {

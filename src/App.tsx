@@ -274,13 +274,14 @@ interface AppProps {
 }
 
 export default function App({
-  allowLocalPreview = import.meta.env.DEV,
+  allowLocalPreview = import.meta.env.DEV || !firebaseRuntime.configured,
   parseReceipt
 }: AppProps) {
   return (
     <SessionProvider
       cloudConfigured={firebaseRuntime.configured}
       allowLocalPreview={allowLocalPreview}
+      autoEnterLocalPreview={import.meta.env.PROD && !firebaseRuntime.configured}
     >
       <SplitSnapApp parseReceipt={parseReceipt} />
     </SessionProvider>

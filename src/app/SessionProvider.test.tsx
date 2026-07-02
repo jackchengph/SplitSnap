@@ -99,6 +99,25 @@ describe("SessionProvider", () => {
     expect(screen.getByText("Maya")).toBeInTheDocument();
   });
 
+  it("can open directly in local preview for a public prototype", () => {
+    render(
+      <SessionProvider
+        cloudConfigured={false}
+        allowLocalPreview
+        autoEnterLocalPreview
+      >
+        <SessionProbe />
+      </SessionProvider>
+    );
+
+    expect(screen.getByText("local")).toBeInTheDocument();
+    expect(screen.getByText("authenticated")).toBeInTheDocument();
+    expect(screen.getByText("ready")).toBeInTheDocument();
+    expect(screen.getByText("Maya")).toBeInTheDocument();
+    expect(screen.getByText("maya_preview")).toBeInTheDocument();
+    expect(bootstrapProfileMock).not.toHaveBeenCalled();
+  });
+
   it("returns local preview users to the welcome state on sign out", async () => {
     const user = userEvent.setup();
     render(
