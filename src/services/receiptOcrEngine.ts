@@ -12,10 +12,18 @@ interface TesseractRecognitionLine {
   confidence?: number | null;
 }
 
+interface TesseractRecognitionParagraph {
+  lines?: TesseractRecognitionLine[] | null;
+}
+
+interface TesseractRecognitionBlock {
+  paragraphs?: TesseractRecognitionParagraph[] | null;
+}
+
 interface TesseractRecognitionData {
   text?: string | null;
   confidence?: number | null;
-  lines?: TesseractRecognitionLine[] | null;
+  blocks?: TesseractRecognitionBlock[] | null;
 }
 
 interface TesseractRecognitionResult {
@@ -23,7 +31,11 @@ interface TesseractRecognitionResult {
 }
 
 interface TesseractWorker {
-  recognize(imageDataUrl: string): Promise<TesseractRecognitionResult>;
+  recognize(
+    imageDataUrl: string,
+    options?: Record<string, never>,
+    output?: { text?: boolean; blocks?: boolean }
+  ): Promise<TesseractRecognitionResult>;
   terminate(): Promise<unknown>;
 }
 
@@ -46,7 +58,7 @@ export async function recognizeReceiptImage(
 
   try {
     worker = await adapter.createWorker("eng");
-    const result = await worker.recognize(imageDataUrl);
+    const result = await worker.recognize(imageDataUrl, {}, { text: true, blocks: true });
     return normalizeRecognition(result.data);
   } finally {
     if (worker) {
@@ -59,11 +71,17 @@ function normalizeRecognition(data: TesseractRecognitionData): OcrRecognition {
   return {
     text: data.text ?? "",
     confidence: normalizeConfidence(data.confidence),
-    lines: (data.lines ?? []).map((line) => ({
+    lines: flattenLines(data.blocks).map((line) => ({
       text: line.text ?? "",
       confidence: normalizeConfidence(line.confidence)
     }))
   };
+}
+
+function flattenLines(blocks: TesseractRecognitionBlock[] | null | undefined): TesseractRecognitionLine[] {
+  return (blocks ?? []).flatMap((block) =>
+    (block.paragraphs ?? []).flatMap((paragraph) => paragraph.lines ?? [])
+  );
 }
 
 function normalizeConfidence(confidence: number | null | undefined): number {
