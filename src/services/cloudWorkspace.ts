@@ -1,12 +1,10 @@
 import {
   collection,
   doc,
-  getDoc,
   onSnapshot,
   query,
   setDoc,
   where,
-  writeBatch,
   type Firestore
 } from "firebase/firestore";
 import type {
@@ -15,7 +13,6 @@ import type {
   Receipt
 } from "../domain/types";
 import { firebaseRuntime } from "../platform/firebase";
-import type { SessionUser } from "./authService";
 
 export interface CloudExpenseDocument {
   id: string;
@@ -80,61 +77,6 @@ export function canSendExpenseReminder(
     participantId !== callerId &&
     expense.participantIds.includes(participantId)
   );
-}
-
-export async function saveUserProfile(user: SessionUser): Promise<void> {
-  const now = new Date().toISOString();
-  const firestore = requireFirestore();
-  const friendCode = user.id.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase();
-  const batch = writeBatch(firestore);
-  batch.set(
-    doc(firestore, "users", user.id),
-    {
-      id: user.id,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      friendCode,
-      updatedAt: now
-    },
-    { merge: true }
-  );
-  batch.set(
-    doc(firestore, "friendCodes", friendCode),
-    {
-      userId: user.id,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      updatedAt: now
-    },
-    { merge: true }
-  );
-  await batch.commit();
-}
-
-export async function connectByFriendCode(
-  currentUserId: string,
-  friendCode: string
-): Promise<string> {
-  const firestore = requireFirestore();
-  const match = await getDoc(
-    doc(firestore, "friendCodes", friendCode.trim().toUpperCase())
-  );
-  const friendId = match.data()?.userId;
-  if (!match.exists() || typeof friendId !== "string" || friendId === currentUserId) {
-    throw new Error("No other SplitSnap user matches that friend code.");
-  }
-
-  const memberIds = [currentUserId, friendId].sort();
-  const friendshipId = memberIds.join("_");
-  const now = new Date().toISOString();
-  await setDoc(doc(requireFirestore(), "friendships", friendshipId), {
-    memberIds,
-    requestedBy: currentUserId,
-    status: "accepted",
-    createdAt: now,
-    updatedAt: now
-  });
-  return friendId;
 }
 
 export async function saveExpense(
