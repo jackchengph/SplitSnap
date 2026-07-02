@@ -134,6 +134,67 @@ describe("friend repository", () => {
     );
   });
 
+  it.each(["declined", "removed"] as const)(
+    "lets the original requester renew a %s relationship without creating a document",
+    async (status) => {
+      const existing = friendship(status);
+      const { gateway, emit } = createGateway();
+      const repository = createFriendRepository("maya", gateway);
+      repository.subscribe(vi.fn(), vi.fn());
+      emit([existing]);
+
+      await repository.requestFriend("nico");
+
+      expect(gateway.updateStatus).toHaveBeenCalledWith(existing.id, "pending", null);
+      expect(gateway.createRequest).not.toHaveBeenCalled();
+    }
+  );
+
+  it("denies renewal by the former recipient before any write", async () => {
+    const existing = friendship("declined", { requestedBy: "nico" });
+    const { gateway, emit } = createGateway();
+    const repository = createFriendRepository("maya", gateway);
+    repository.subscribe(vi.fn(), vi.fn());
+    emit([existing]);
+
+    await expect(repository.requestFriend("nico")).rejects.toThrow(
+      "Only the original requester can renew this friend request."
+    );
+    expect(gateway.updateStatus).not.toHaveBeenCalled();
+    expect(gateway.createRequest).not.toHaveBeenCalled();
+  });
+
+  it("denies a request for a blocked relationship before any write", async () => {
+    const existing = friendship("blocked", { blockedBy: "nico" });
+    const { gateway, emit } = createGateway();
+    const repository = createFriendRepository("maya", gateway);
+    repository.subscribe(vi.fn(), vi.fn());
+    emit([existing]);
+
+    await expect(repository.requestFriend("nico")).rejects.toThrow(
+      "This friendship cannot be requested in its current state."
+    );
+    expect(gateway.updateStatus).not.toHaveBeenCalled();
+    expect(gateway.createRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(["pending", "connected"] as const)(
+    "does not stage an invalid create for a known %s relationship",
+    async (status) => {
+      const existing = friendship(status);
+      const { gateway, emit } = createGateway();
+      const repository = createFriendRepository("maya", gateway);
+      repository.subscribe(vi.fn(), vi.fn());
+      emit([existing]);
+
+      await expect(repository.requestFriend("nico")).rejects.toThrow(
+        "This friendship cannot be requested in its current state."
+      );
+      expect(gateway.updateStatus).not.toHaveBeenCalled();
+      expect(gateway.createRequest).not.toHaveBeenCalled();
+    }
+  );
+
   it("accepts and declines only an incoming pending request", async () => {
     const incoming = friendship("pending", { requestedBy: "nico" });
     const outgoing = friendship("pending");

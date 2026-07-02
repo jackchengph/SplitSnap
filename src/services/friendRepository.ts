@@ -4,7 +4,8 @@ import {
   getDoc,
   onSnapshot,
   query,
-  setDoc,
+  runTransaction,
+  serverTimestamp,
   Timestamp,
   updateDoc,
   where,
@@ -95,8 +96,8 @@ function writeFriendship(friendship: Friendship): DocumentData {
     requestedBy: friendship.requestedBy,
     status: friendship.status,
     blockedBy: friendship.blockedBy,
-    createdAt: Timestamp.fromDate(new Date(friendship.createdAt)),
-    updatedAt: Timestamp.fromDate(new Date(friendship.updatedAt))
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   };
 }
 
@@ -124,39 +125,19 @@ function createFirebaseFriendGateway(): FriendGateway {
     },
     async createRequest(friendship) {
       const reference = doc(firestore, "friendships", friendship.id);
-      try {
-        await setDoc(reference, writeFriendship(friendship));
-        return;
-      } catch (createError: unknown) {
-        let snapshot;
-        try {
-          snapshot = await getDoc(reference);
-        } catch {
-          throw createError;
+      await runTransaction(firestore, async (transaction) => {
+        const existing = await transaction.get(reference);
+        if (existing.exists()) {
+          throw new Error("A friendship already exists for these users.");
         }
-        if (!snapshot.exists()) throw createError;
-
-        const existing = readFriendship(snapshot.id, snapshot.data());
-        const isOriginalRequester = existing.requestedBy === friendship.requestedBy;
-        if (
-          !isOriginalRequester ||
-          !canTransitionFriendship(existing.status, "pending", "requester")
-        ) {
-          throw new Error("Only the original requester can renew this friend request.");
-        }
-
-        await updateDoc(reference, {
-          status: "pending",
-          blockedBy: null,
-          updatedAt: Timestamp.fromDate(new Date(friendship.updatedAt))
-        });
-      }
+        transaction.set(reference, writeFriendship(friendship));
+      });
     },
     async updateStatus(id, status, blockedBy) {
       await updateDoc(doc(firestore, "friendships", id), {
         status,
         blockedBy,
-        updatedAt: Timestamp.now()
+        updatedAt: serverTimestamp()
       });
     },
     subscribeMemberships(userId, listener, onError) {
@@ -233,6 +214,24 @@ export function createFriendRepository(
       }
 
       const id = friendshipIdFor(currentUserId, targetUserId);
+      const existing = memberships.get(id);
+      if (existing) {
+        const canRenew =
+          existing.requestedBy === currentUserId &&
+          canTransitionFriendship(existing.status, "pending", "requester");
+        if (canRenew) {
+          await updateMembershipStatus(existing, "pending", null);
+          return;
+        }
+        if (
+          (existing.status === "declined" || existing.status === "removed") &&
+          existing.requestedBy !== currentUserId
+        ) {
+          throw new Error("Only the original requester can renew this friend request.");
+        }
+        throw new Error("This friendship cannot be requested in its current state.");
+      }
+
       const memberIds = [currentUserId, targetUserId].sort() as [string, string];
       const now = new Date().toISOString();
       await gateway.createRequest({
