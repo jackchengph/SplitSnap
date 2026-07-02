@@ -36,9 +36,9 @@ describe("parseReceiptLayout", () => {
           word("Fries", 3, 10, 65), word("1", 3, 125, 135), word("100.00", 3, 180, 235), word("100.00", 3, 270, 330),
           word("SUBTOTAL", 4, 170, 250), word("450.00", 4, 270, 330),
           word("VAT", 5, 190, 225), word("54.00", 5, 280, 330),
-          word("TOTAL", 6, 180, 235), word("504.00", 6, 270, 330)
+          word("AMOUNT", 6, 160, 225), word("DUE", 6, 228, 258), word("504.00", 6, 270, 330)
         ],
-        ["BGC DINER", "ITEM QTY PRICE AMOUNT", "Burger 2 175.00 350.00", "Fries 1 100.00 100.00", "SUBTOTAL 450.00", "VAT 54.00", "TOTAL 504.00"]
+        ["BGC DINER", "ITEM QTY PRICE AMOUNT", "Burger 2 175.00 350.00", "Fries 1 100.00 100.00", "SUBTOTAL 450.00", "VAT 54.00", "AMOUNT DUE 504.00"]
       ),
       participantIds: ["maya", "nico"]
     });
@@ -47,7 +47,7 @@ describe("parseReceiptLayout", () => {
       { name: "Burger", quantity: 2, price: 350, assignedParticipantIds: ["maya", "nico"] },
       { name: "Fries", quantity: 1, price: 100 }
     ]);
-    expect(parsed).toMatchObject({ subtotal: 450, tax: 54, total: 504 });
+    expect(parsed).toMatchObject({ subtotal: 450, tax: 0, total: 504 });
     expect(parsed?.items.some((item) => /subtotal|vat|total/i.test(item.name))).toBe(false);
   });
 
@@ -93,5 +93,26 @@ describe("parseReceiptLayout", () => {
     });
 
     expect(parsed).toBeUndefined();
+  });
+
+  it("ignores every visual row after subtotal except amount due", () => {
+    const parsed = parseReceiptLayout({
+      recognition: recognition(
+        [
+          word("ITEM", 1, 10, 70), word("AMOUNT", 1, 260, 330),
+          word("Burger", 2, 10, 80), word("350.00", 2, 270, 330),
+          word("SUBTOTAL", 3, 170, 250), word("350.00", 3, 270, 330),
+          word("Optional", 4, 10, 80), word("tip", 4, 85, 110), word("99.00", 4, 270, 330),
+          word("VAT", 5, 190, 225), word("42.00", 5, 280, 330),
+          word("AMOUNT", 6, 150, 220), word("DUE", 6, 225, 255), word("392.00", 6, 270, 330)
+        ],
+        ["CAFE", "ITEM AMOUNT", "Burger 350.00", "SUBTOTAL 350.00", "Optional tip 99.00", "VAT 42.00", "AMOUNT DUE 392.00"]
+      ),
+      participantIds: ["maya"]
+    });
+
+    expect(parsed?.items.map((item) => item.name)).toEqual(["Burger"]);
+    expect(parsed?.subtotal).toBe(350);
+    expect(parsed?.total).toBe(392);
   });
 });

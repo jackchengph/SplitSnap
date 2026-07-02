@@ -8,7 +8,8 @@ const FALLBACK_MERCHANT_NAME = "Scanned receipt";
 const SUBTOTAL_LABELS = ["subtotal", "sub total", "sub-total"];
 const TAX_LABELS = ["vat", "tax"];
 const SERVICE_CHARGE_LABELS = ["service charge", "svc charge", "service fee"];
-const TOTAL_LABELS = ["total", "grand total", "amount due"];
+const TOTAL_LABELS = ["total", "grand total"];
+const AMOUNT_DUE_LABELS = ["amount due", "total amount due", "balance due"];
 const PAYMENT_LABELS = [
   "cash",
   "change",
@@ -75,6 +76,7 @@ const subtotalMatcher = buildAnchoredMatcher(SUBTOTAL_LABELS);
 const taxMatcher = buildAnchoredMatcher(TAX_LABELS);
 const serviceChargeMatcher = buildAnchoredMatcher(SERVICE_CHARGE_LABELS);
 const totalMatcher = buildAnchoredMatcher(TOTAL_LABELS);
+const amountDueMatcher = buildAnchoredMatcher(AMOUNT_DUE_LABELS);
 const paymentMatcher = buildAnchoredMatcher(PAYMENT_LABELS);
 const metadataMatcher = buildAnchoredMatcher(METADATA_LABELS);
 
@@ -166,7 +168,8 @@ function isSummaryLine(line: string): boolean {
     subtotalMatcher.test(normalizedLine) ||
     taxMatcher.test(normalizedLine) ||
     serviceChargeMatcher.test(normalizedLine) ||
-    totalMatcher.test(normalizedLine)
+    totalMatcher.test(normalizedLine) ||
+    amountDueMatcher.test(normalizedLine)
   );
 }
 
@@ -177,8 +180,13 @@ export function classifyReceiptSummaryLine(line: string): ReceiptSummaryField | 
   if (subtotalMatcher.test(normalizedLine)) return "subtotal";
   if (taxMatcher.test(normalizedLine)) return "tax";
   if (serviceChargeMatcher.test(normalizedLine)) return "serviceCharge";
+  if (amountDueMatcher.test(normalizedLine)) return "total";
   if (totalMatcher.test(normalizedLine)) return "total";
   return undefined;
+}
+
+export function isReceiptAmountDueLine(line: string): boolean {
+  return amountDueMatcher.test(normalizeReceiptKeywordLine(line));
 }
 
 export function isReceiptExcludedLine(line: string): boolean {
@@ -240,15 +248,26 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
   let foundExplicitSubtotal = false;
   let foundExplicitTotal = false;
   let pastGrandTotal = false;
+  let summaryOnlyAfterSubtotal = false;
 
   for (const line of lines) {
     const parsedMoney = parseReceiptMoney(line);
     const normalizedLine = normalizeReceiptKeywordLine(line);
     if (pastGrandTotal) continue;
 
+    if (summaryOnlyAfterSubtotal) {
+      if (parsedMoney && amountDueMatcher.test(normalizedLine)) {
+        total = parsedMoney.amount;
+        foundExplicitTotal = true;
+        pastGrandTotal = true;
+      }
+      continue;
+    }
+
     if (parsedMoney && subtotalMatcher.test(normalizedLine)) {
       subtotal = parsedMoney.amount;
       foundExplicitSubtotal = true;
+      summaryOnlyAfterSubtotal = true;
       continue;
     }
 
@@ -262,7 +281,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       continue;
     }
 
-    if (parsedMoney && totalMatcher.test(normalizedLine)) {
+    if (parsedMoney && (totalMatcher.test(normalizedLine) || amountDueMatcher.test(normalizedLine))) {
       total = parsedMoney.amount;
       foundExplicitTotal = true;
       pastGrandTotal = true;

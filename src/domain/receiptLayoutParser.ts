@@ -1,6 +1,7 @@
 import type { OcrRecognition, OcrWord } from "../services/receiptOcrEngine";
 import {
   classifyReceiptSummaryLine,
+  isReceiptAmountDueLine,
   isReceiptExcludedLine,
   parseReceiptMoney,
   parseReceiptText,
@@ -122,10 +123,18 @@ function parseStructuredRows(rows: VisualRow[], header: HeaderLayout): {
   const items: StructuredItemRow[] = [];
   const summaryLines: string[] = [];
   let pending: { name: string; quantity: number; confidence: number } | undefined;
+  let summaryOnlyAfterSubtotal = false;
 
   for (const row of rows.slice(header.rowIndex + 1)) {
-    if (classifyReceiptSummaryLine(row.text)) {
+    const summaryField = classifyReceiptSummaryLine(row.text);
+    if (summaryOnlyAfterSubtotal) {
+      if (isReceiptAmountDueLine(row.text)) summaryLines.push(row.text);
+      pending = undefined;
+      continue;
+    }
+    if (summaryField) {
       summaryLines.push(row.text);
+      if (summaryField === "subtotal") summaryOnlyAfterSubtotal = true;
       pending = undefined;
       continue;
     }

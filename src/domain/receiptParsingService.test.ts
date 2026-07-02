@@ -109,7 +109,7 @@ describe("receiptParsingService", () => {
           "SUBTOTAL 300.00",
           "VAT 36.00",
           "SERVICE CHARGE 24.00",
-          "TOTAL 360.00"
+          "AMOUNT DUE 360.00"
         ].join("\n"),
         confidence: 0.94,
         lines: [],
@@ -126,8 +126,8 @@ describe("receiptParsingService", () => {
       merchantName: "Cafe Luna",
       imageUrl: receiptImage,
       parserMode: "camera-ocr",
-      tax: 36,
-      serviceCharge: 24,
+      tax: 0,
+      serviceCharge: 0,
       total: 360,
       parseStatus: "Ready to split"
     });

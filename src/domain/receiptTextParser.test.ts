@@ -12,7 +12,7 @@ describe("receiptTextParser", () => {
         "SUBTOTAL               420.00",
         "VAT                     50.40",
         "SERVICE CHARGE          42.00",
-        "TOTAL                  ₱512.40"
+        "AMOUNT DUE             ₱512.40"
       ].join("\n"),
       confidence: 0.92,
       participantIds: ["maya", "nico"]
@@ -23,7 +23,7 @@ describe("receiptTextParser", () => {
       { name: "Americano", quantity: 2, price: 240, needsReview: false },
       { name: "Croissant", quantity: 1, price: 180, needsReview: false }
     ]);
-    expect(parsed).toMatchObject({ subtotal: 420, tax: 50.4, serviceCharge: 42, total: 512.4 });
+    expect(parsed).toMatchObject({ subtotal: 420, tax: 0, serviceCharge: 0, total: 512.4 });
   });
 
   it("normalizes OCR-confused price characters without changing names", () => {
@@ -74,6 +74,30 @@ describe("receiptTextParser", () => {
     expect(parsed.items.map((item) => item.name)).toEqual(["JASMINE MT"]);
     expect(parsed.subtotal).toBe(24000);
     expect(parsed.total).toBe(24000);
+  });
+
+  it("stops assigning rows at subtotal and uses amount due as the final total", () => {
+    const parsed = parseReceiptText({
+      text: [
+        "BGC DINER",
+        "Burger 350.00",
+        "Fries 100.00",
+        "SUBTOTAL 450.00",
+        "VAT 54.00",
+        "SERVICE CHARGE 20.00",
+        "Optional tip 99.00",
+        "AMOUNT DUE 524.00",
+        "CASH 600.00"
+      ].join("\n"),
+      confidence: 0.94,
+      participantIds: ["maya", "nico"]
+    });
+
+    expect(parsed.items.map((item) => item.name)).toEqual(["Burger", "Fries"]);
+    expect(parsed.subtotal).toBe(450);
+    expect(parsed.tax).toBe(0);
+    expect(parsed.serviceCharge).toBe(0);
+    expect(parsed.total).toBe(524);
   });
 
   it("returns an editable empty row when no items can be parsed", () => {
@@ -165,12 +189,12 @@ describe("receiptTextParser", () => {
 
   it("warns and loses score when explicit subtotal, items, and total disagree", () => {
     const inconsistent = parseReceiptText({
-      text: "CAFE\nLatte 160.00\nSUBTOTAL 150.00\nTOTAL 160.00",
+      text: "CAFE\nLatte 160.00\nSUBTOTAL 150.00\nAMOUNT DUE 160.00",
       confidence: 0.91,
       participantIds: ["maya"]
     });
     const consistent = parseReceiptText({
-      text: "CAFE\nLatte 160.00\nSUBTOTAL 160.00\nTOTAL 160.00",
+      text: "CAFE\nLatte 160.00\nSUBTOTAL 160.00\nAMOUNT DUE 160.00",
       confidence: 0.91,
       participantIds: ["maya"]
     });
