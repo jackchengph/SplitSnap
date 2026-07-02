@@ -55,7 +55,7 @@ export interface ParsedReceiptText {
   warnings: string[];
 }
 
-interface ParsedMoneyToken {
+export interface ParsedMoneyToken {
   amount: number;
   normalized: boolean;
   prefix: string;
@@ -111,7 +111,7 @@ function normalizeMoneyToken(token: string): { normalizedToken: string; changed:
   return { normalizedToken, changed };
 }
 
-function parseTrailingMoney(line: string): ParsedMoneyToken | undefined {
+export function parseReceiptMoney(line: string): ParsedMoneyToken | undefined {
   const match = line.match(trailingMoneyPattern);
   if (!match?.groups?.money) {
     return undefined;
@@ -156,6 +156,20 @@ function isSummaryLine(line: string): boolean {
     serviceChargeMatcher.test(line) ||
     totalMatcher.test(line)
   );
+}
+
+export type ReceiptSummaryField = "subtotal" | "tax" | "serviceCharge" | "total";
+
+export function classifyReceiptSummaryLine(line: string): ReceiptSummaryField | undefined {
+  if (subtotalMatcher.test(line)) return "subtotal";
+  if (taxMatcher.test(line)) return "tax";
+  if (serviceChargeMatcher.test(line)) return "serviceCharge";
+  if (totalMatcher.test(line)) return "total";
+  return undefined;
+}
+
+export function isReceiptExcludedLine(line: string): boolean {
+  return isSummaryLine(line) || isPaymentLine(line) || isMetadataLine(line);
 }
 
 function isPaymentLine(line: string): boolean {
@@ -214,7 +228,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
   let foundExplicitTotal = false;
 
   for (const line of lines) {
-    const parsedMoney = parseTrailingMoney(line);
+    const parsedMoney = parseReceiptMoney(line);
 
     if (parsedMoney && subtotalMatcher.test(line)) {
       subtotal = parsedMoney.amount;
