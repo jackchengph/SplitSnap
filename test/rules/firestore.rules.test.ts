@@ -298,6 +298,25 @@ describe("friendship authorization", () => {
     );
   });
 
+  it("allows only the original requester to renew a removed relationship", async () => {
+    await seedFriendship("removed");
+    const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
+    const nicoDb = testEnvironment.authenticatedContext("nico").firestore();
+
+    await assertFails(
+      updateDoc(doc(nicoDb, "friendships/maya__nico"), {
+        status: "pending",
+        updatedAt: later
+      })
+    );
+    await assertSucceeds(
+      updateDoc(doc(mayaDb, "friendships/maya__nico"), {
+        status: "pending",
+        updatedAt: later
+      })
+    );
+  });
+
   it("enforces block ownership and blocker-only unblocking", async () => {
     await seedFriendship("connected");
     const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
