@@ -67,4 +67,86 @@ describe("receiptTextParser", () => {
 
     expect(scoreParsedReceipt(structured)).toBeGreaterThan(scoreParsedReceipt(ambiguous));
   });
+
+  it("keeps stable item ids and OCR metadata on duplicate rows", () => {
+    const parsed = parseReceiptText({
+      text: "CAFE\nCoffee 120.00\nCoffee 120.00\nTOTAL 240.00",
+      confidence: 0.91,
+      participantIds: ["maya", "nico"]
+    });
+
+    expect(parsed.items).toMatchObject([
+      {
+        id: "coffee-1",
+        assignedParticipantIds: ["maya", "nico"],
+        parseSource: "ocr",
+        confidence: 0.91
+      },
+      {
+        id: "coffee-2",
+        assignedParticipantIds: ["maya", "nico"],
+        parseSource: "ocr",
+        confidence: 0.91
+      }
+    ]);
+  });
+
+  it("marks low-confidence rows below 0.85 for review and warns", () => {
+    const parsed = parseReceiptText({
+      text: "CAFE\nLatte 160.00\nTOTAL 160.00",
+      confidence: 0.84,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items[0]).toMatchObject({ name: "Latte", needsReview: true });
+    expect(parsed.warnings).toContain("Some OCR rows need review before the receipt is ready.");
+  });
+
+  it("does not treat Maya menu items as payment lines", () => {
+    const parsed = parseReceiptText({
+      text: "CAFE\nMaya Latte 120.00\nTOTAL 120.00",
+      confidence: 0.91,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items).toMatchObject([{ name: "Maya Latte", price: 120, needsReview: false }]);
+  });
+
+  it("rejects bare metadata rows as trusted items", () => {
+    const parsed = parseReceiptText({
+      text: "BISTRO\nTABLE 12\nTOTAL 0.00",
+      confidence: 0.93,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items).toMatchObject([{ name: "Unrecognized item", price: 0, needsReview: true }]);
+    expect(parsed.warnings[0]).toMatch(/could not find item rows/i);
+  });
+
+  it("keeps integer-priced menu rows when currency context is clear", () => {
+    const parsed = parseReceiptText({
+      text: "BISTRO\nFries PHP 120\nTOTAL PHP 120",
+      confidence: 0.93,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items).toMatchObject([{ name: "Fries", price: 120, needsReview: false }]);
+  });
+
+  it("warns and loses score when explicit subtotal, items, and total disagree", () => {
+    const inconsistent = parseReceiptText({
+      text: "CAFE\nLatte 160.00\nSUBTOTAL 150.00\nTOTAL 160.00",
+      confidence: 0.91,
+      participantIds: ["maya"]
+    });
+    const consistent = parseReceiptText({
+      text: "CAFE\nLatte 160.00\nSUBTOTAL 160.00\nTOTAL 160.00",
+      confidence: 0.91,
+      participantIds: ["maya"]
+    });
+
+    expect(inconsistent).toMatchObject({ subtotal: 150, total: 160 });
+    expect(inconsistent.warnings).toContain("Receipt totals do not reconcile with parsed item rows.");
+    expect(scoreParsedReceipt(inconsistent)).toBeLessThan(scoreParsedReceipt(consistent));
+  });
 });

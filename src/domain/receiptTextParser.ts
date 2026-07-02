@@ -1,6 +1,6 @@
 import type { ReceiptItem } from "./types";
 
-const LOW_CONFIDENCE_THRESHOLD = 0.8;
+const LOW_CONFIDENCE_THRESHOLD = 0.85;
 const MONEY_TOLERANCE = 0.05;
 const FALLBACK_ITEM_NAME = "Unrecognized item";
 const FALLBACK_MERCHANT_NAME = "Scanned receipt";
@@ -17,9 +17,21 @@ const PAYMENT_LABELS = [
   "mastercard",
   "amex",
   "gcash",
-  "maya",
   "tendered",
   "amount paid"
+];
+const METADATA_LABELS = [
+  "table",
+  "tbl",
+  "guest",
+  "guests",
+  "order",
+  "invoice",
+  "check",
+  "terminal",
+  "queue",
+  "orno",
+  "or no"
 ];
 
 const quantityPrefixPattern = /^(?<quantity>\d+)\s*[xX]\s*/;
@@ -47,6 +59,8 @@ interface ParsedMoneyToken {
   amount: number;
   normalized: boolean;
   prefix: string;
+  hasCurrencyMarker: boolean;
+  hasDecimalPlaces: boolean;
 }
 
 function escapeForRegex(value: string): string {
@@ -62,6 +76,7 @@ const taxMatcher = buildAnchoredMatcher(TAX_LABELS);
 const serviceChargeMatcher = buildAnchoredMatcher(SERVICE_CHARGE_LABELS);
 const totalMatcher = buildAnchoredMatcher(TOTAL_LABELS);
 const paymentMatcher = buildAnchoredMatcher(PAYMENT_LABELS);
+const metadataMatcher = buildAnchoredMatcher(METADATA_LABELS);
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -115,7 +130,9 @@ function parseTrailingMoney(line: string): ParsedMoneyToken | undefined {
   return {
     amount: roundMoney(amount),
     normalized: changed,
-    prefix: (match.groups.leading ?? "").trim()
+    prefix: (match.groups.leading ?? "").trim(),
+    hasCurrencyMarker: /(?:PHP|php|₱)/.test(line),
+    hasDecimalPlaces: /\.[0-9OISl]{2}\s*$/i.test(match.groups.money)
   };
 }
 
@@ -145,6 +162,14 @@ function isPaymentLine(line: string): boolean {
   return paymentMatcher.test(line);
 }
 
+function isMetadataLine(line: string): boolean {
+  return metadataMatcher.test(line);
+}
+
+function isAmbiguousPriceToken(name: string, parsedMoney: ParsedMoneyToken): boolean {
+  return !parsedMoney.hasCurrencyMarker && !parsedMoney.hasDecimalPlaces && /^[A-Z0-9 /&-]+$/.test(name);
+}
+
 function createFallbackItem(confidence: number, participantIds: string[]): ReceiptItem {
   return {
     id: "unrecognized-item-1",
@@ -163,13 +188,13 @@ function totalsAreConsistent(parsed: ParsedReceiptText): boolean {
     return false;
   }
 
-  const components = roundMoney(parsed.subtotal + parsed.tax + parsed.serviceCharge);
-  if (Math.abs(parsed.total - components) <= MONEY_TOLERANCE) {
-    return true;
+  const itemsTotal = roundMoney(parsed.items.reduce((sum, item) => sum + item.price, 0));
+  if (Math.abs(parsed.subtotal - itemsTotal) > MONEY_TOLERANCE) {
+    return false;
   }
 
-  const itemsTotal = roundMoney(parsed.items.reduce((sum, item) => sum + item.price, 0));
-  return Math.abs(parsed.total - itemsTotal) <= MONEY_TOLERANCE;
+  const components = roundMoney(parsed.subtotal + parsed.tax + parsed.serviceCharge);
+  return Math.abs(parsed.total - components) <= MONEY_TOLERANCE;
 }
 
 export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
@@ -213,7 +238,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       continue;
     }
 
-    if (isSummaryLine(line) || isPaymentLine(line)) {
+    if (isSummaryLine(line) || isPaymentLine(line) || isMetadataLine(line)) {
       continue;
     }
 
@@ -226,9 +251,14 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       continue;
     }
 
+    if (isMetadataLine(quantityAndName.name)) {
+      continue;
+    }
+
     const occurrence = (itemCounts.get(quantityAndName.name) ?? 0) + 1;
     itemCounts.set(quantityAndName.name, occurrence);
 
+    const isAmbiguous = isAmbiguousPriceToken(quantityAndName.name, parsedMoney);
     items.push({
       id: `${slugify(quantityAndName.name)}-${occurrence}`,
       name: quantityAndName.name,
@@ -237,7 +267,8 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       assignedParticipantIds: input.participantIds,
       confidence: input.confidence,
       parseSource: "ocr",
-      needsReview: input.confidence < LOW_CONFIDENCE_THRESHOLD || parsedMoney.normalized
+      needsReview:
+        input.confidence < LOW_CONFIDENCE_THRESHOLD || parsedMoney.normalized || isAmbiguous
     });
   }
 
