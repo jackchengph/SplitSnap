@@ -102,7 +102,9 @@ function createFakeCanvas(record: FakeCanvasRecord, sourceImage: FakeImageBitmap
   const pixels = new Uint8ClampedArray(record.width * record.height * 4);
   const context = {
     fillStyle: "#000000",
-    drawImage(_image: FakeImageBitmap, _x: number, _y: number, width: number, height: number) {
+    drawImage(_image: FakeImageBitmap, ...coordinates: number[]) {
+      const width = coordinates.length >= 8 ? coordinates[6] : coordinates[2];
+      const height = coordinates.length >= 8 ? coordinates[7] : coordinates[3];
       record.draws.push({ width, height, backgroundColor: this.fillStyle });
       const resized = resizePixels(sourceImage, width, height);
       pixels.set(resized);
@@ -211,7 +213,7 @@ describe("prepareReceiptImages", () => {
     const variants = await prepareReceiptImages("data:image/png;base64,abc", browser);
 
     expect(variants.map((variant) => variant.name)).toEqual(["original", "grayscale", "high-contrast"]);
-    expect(records).toHaveLength(2);
+    expect(records).toHaveLength(3);
     expect(records[0].width).toBe(4);
     expect(records[0].height).toBe(2);
     expect(records[1].width).toBe(4);
@@ -236,5 +238,32 @@ describe("prepareReceiptImages", () => {
     expect(records[0].height).toBe(1200);
     expect(records[1].width).toBe(2400);
     expect(records[1].height).toBe(1200);
+  });
+
+  it("adds a cropped receipt candidate when light paper is surrounded by a dark background", async () => {
+    const pixels = new Uint8ClampedArray(10 * 10 * 4);
+    for (let y = 0; y < 10; y += 1) {
+      for (let x = 0; x < 10; x += 1) {
+        const offset = (y * 10 + x) * 4;
+        const isPaper = x >= 2 && x <= 7 && y >= 1 && y <= 8;
+        pixels[offset] = isPaper ? 230 : 15;
+        pixels[offset + 1] = isPaper ? 230 : 15;
+        pixels[offset + 2] = isPaper ? 230 : 15;
+        pixels[offset + 3] = 255;
+      }
+    }
+    const records: FakeCanvasRecord[] = [];
+
+    const variants = await prepareReceiptImages(
+      "data:image/jpeg;base64,receipt",
+      createCanvasBrowser({ width: 10, height: 10, pixels }, records)
+    );
+
+    expect(variants.map((variant) => variant.name)).toEqual([
+      "original",
+      "grayscale",
+      "high-contrast",
+      "receipt-crop"
+    ]);
   });
 });
