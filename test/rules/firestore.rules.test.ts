@@ -63,6 +63,9 @@ async function seedProfiles(): Promise<void> {
     await setDoc(doc(database, "friendCodes/NICO8F2Q"), {
       userId: "nico"
     });
+    await setDoc(doc(database, "handles/nicoeats"), {
+      userId: "nico"
+    });
   });
 }
 
@@ -132,6 +135,22 @@ describe("profile authorization", () => {
     await assertFails(getDocs(collection(mayaDb, "publicProfiles")));
   });
 
+  it("denies malformed public profiles that contain private fields", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "publicProfiles/leaky"), {
+        id: "leaky",
+        displayName: "Leaky",
+        photoURL: null,
+        handle: "leaky",
+        reliabilityScore: 10,
+        paymentHistory: ["late"]
+      });
+    });
+    const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
+
+    await assertFails(getDoc(doc(mayaDb, "publicProfiles/leaky")));
+  });
+
   it("allows known friend-code lookup without listing or client writes", async () => {
     const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
 
@@ -140,6 +159,25 @@ describe("profile authorization", () => {
     await assertFails(
       setDoc(doc(mayaDb, "friendCodes/MAYA0001"), { userId: "maya" })
     );
+  });
+
+  it("allows exact handle lookup without listing or client writes", async () => {
+    const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
+
+    await assertSucceeds(getDoc(doc(mayaDb, "handles/nicoeats")));
+    await assertFails(getDocs(collection(mayaDb, "handles")));
+    await assertFails(
+      setDoc(doc(mayaDb, "handles/mayaeats"), { userId: "maya" })
+    );
+  });
+
+  it("denies unauthenticated profile and discovery access", async () => {
+    const anonymousDb = testEnvironment.unauthenticatedContext().firestore();
+
+    await assertFails(getDoc(doc(anonymousDb, "users/maya")));
+    await assertFails(getDoc(doc(anonymousDb, "publicProfiles/nico")));
+    await assertFails(getDoc(doc(anonymousDb, "friendCodes/NICO8F2Q")));
+    await assertFails(getDoc(doc(anonymousDb, "handles/nicoeats")));
   });
 });
 
@@ -221,6 +259,20 @@ describe("friendship authorization", () => {
         updatedAt: later
       })
     );
+    await assertFails(
+      updateDoc(doc(nicoDb, "friendships/maya__nico"), {
+        memberKey: "nico__maya",
+        status: "connected",
+        updatedAt: later
+      })
+    );
+    await assertFails(
+      updateDoc(doc(nicoDb, "friendships/maya__nico"), {
+        createdAt: later,
+        status: "connected",
+        updatedAt: later
+      })
+    );
   });
 
   it("allows either connected member to remove the relationship", async () => {
@@ -290,6 +342,26 @@ describe("friendship authorization", () => {
     await assertFails(
       updateDoc(doc(enzoDb, "friendships/maya__nico"), {
         status: "removed",
+        updatedAt: later
+      })
+    );
+  });
+
+  it("does not let a blocked relationship become pending or connected", async () => {
+    await seedFriendship("blocked");
+    const mayaDb = testEnvironment.authenticatedContext("maya").firestore();
+
+    await assertFails(
+      updateDoc(doc(mayaDb, "friendships/maya__nico"), {
+        status: "pending",
+        blockedBy: null,
+        updatedAt: later
+      })
+    );
+    await assertFails(
+      updateDoc(doc(mayaDb, "friendships/maya__nico"), {
+        status: "connected",
+        blockedBy: null,
         updatedAt: later
       })
     );

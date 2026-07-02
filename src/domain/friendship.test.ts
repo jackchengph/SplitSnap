@@ -45,6 +45,9 @@ describe("friendship domain", () => {
     expect(canTransitionFriendship("connected", "removed", "member")).toBe(true);
     expect(canTransitionFriendship("blocked", "removed", "member")).toBe(true);
     expect(canTransitionFriendship("blocked", "connected", "member")).toBe(false);
+    expect(canTransitionFriendship("removed", "pending", "requester")).toBe(true);
+    expect(canTransitionFriendship("removed", "pending", "member")).toBe(false);
+    expect(canTransitionFriendship("declined", "pending", "recipient")).toBe(false);
   });
 
   it("removes private profile fields from public discovery", () => {

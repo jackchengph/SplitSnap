@@ -113,7 +113,10 @@ service cloud.firestore {
     }
 
     match /handles/{handle} {
-      allow read, write: if false;
+      allow get: if signedIn()
+        && resource.data.keys().hasOnly(['userId'])
+        && resource.data.userId is string;
+      allow list, write: if false;
     }
 
     match /friendCodes/{friendCode} {

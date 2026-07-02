@@ -26,7 +26,7 @@ export function canTransitionFriendship(
   if (current === "connected") {
     return actor === "member" && (next === "removed" || next === "blocked");
   }
-  return actor === "member" && next === "pending";
+  return actor === "requester" && next === "pending";
 }
 
 export function toPublicUserProfile(profile: UserProfile): PublicUserProfile {
