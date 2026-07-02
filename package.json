@@ -7,12 +7,13 @@
     "dev": "vite --host 0.0.0.0",
     "build": "npm run typecheck && npm run typecheck:node && npm run typecheck:api && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "vitest",
-    "test:run": "vitest run",
+    "test": "vitest --exclude 'test/rules/**'",
+    "test:run": "vitest run --exclude 'test/rules/**'",
+    "test:rules": "firebase emulators:exec --project demo-splitsnap --only firestore 'vitest run test/rules/firestore.rules.test.ts'",
     "typecheck": "tsc --noEmit",
     "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
     "typecheck:api": "tsc -p tsconfig.api.json --noEmit",
-    "verify": "npm run test:run && npm run build"
+    "verify": "npm run test:run && npm run test:rules && npm run build"
   },
   "dependencies": {
     "firebase": "^12.15.0",
@@ -24,6 +25,7 @@
     "vite-plugin-pwa": "^1.3.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.0.0",
@@ -32,6 +34,7 @@
     "@types/react-dom": "^19.0.0",
     "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-react": "^5.0.0",
+    "firebase-tools": "^15.22.4",
     "jsdom": "^26.0.0",
     "typescript": "^5.0.0",
     "vite": "^7.0.0",
