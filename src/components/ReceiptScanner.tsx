@@ -102,7 +102,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
           <div>
             <strong>{cameraMessage}</strong>
             <p className="muted">
-              Align the whole receipt inside the highlighted frame, then capture. OCR runs first, unclear regions get YOLO-style fallback, and unresolved rows stay editable.
+              Align the whole receipt inside the highlighted frame, then capture. SplitSnap compares multiple image treatments, receipt columns, and totals; uncertain rows stay editable.
             </p>
           </div>
           <button type="button" onClick={captureFrame}>
@@ -110,7 +110,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
           </button>
         </div>
         <div className="parse-steps" aria-label="Receipt parse status">
-          {["Scanning receipt", "OCR reading items", "Checking unclear areas", "Needs manual review", "Ready to split"].map(
+          {["Scanning receipt", "OCR reading items", "Analyzing receipt layout", "Needs manual review", "Ready to split"].map(
             (status) => (
               <span className={parseStatus === status ? "tag active" : "tag"} key={status}>
                 {status}

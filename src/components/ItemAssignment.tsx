@@ -46,7 +46,7 @@ export function ItemAssignment({
                   {item.parseSource ? (
                     <span className={item.needsReview ? "tag warning-tag" : "tag"}>
                       {item.parseSource === "yolo"
-                        ? "YOLO fallback"
+                        ? "Layout recovery"
                         : item.parseSource === "manual"
                           ? "Manual review"
                           : "OCR"}

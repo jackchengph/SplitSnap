@@ -84,8 +84,8 @@ export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
       <div className={lowConfidence ? "notice warning" : "notice"}>
         OCR confidence: {Math.round(receipt.ocrConfidence * 100)}%.
         {lowConfidence
-          ? " SplitSnap would retry with layout detection and a YOLO-style fallback before asking you to correct items."
-          : " Simulated OCR looks usable, and you can still correct every item."}
+          ? " SplitSnap checked alternate image treatments and receipt layouts. Confirm the highlighted rows before splitting."
+          : " OCR and receipt totals look usable, and you can still correct every item."}
       </div>
       {receipt.parseWarnings?.map((warning) => (
         <div className="notice warning" key={warning}>

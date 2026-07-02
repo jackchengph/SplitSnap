@@ -5,6 +5,7 @@ export type ParseStatus =
   | "Idle"
   | "Scanning receipt"
   | "OCR reading items"
+  | "Analyzing receipt layout"
   | "Checking unclear areas"
   | "Needs manual review"
   | "Ready to split";

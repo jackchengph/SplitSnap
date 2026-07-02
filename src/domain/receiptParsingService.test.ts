@@ -19,6 +19,46 @@ function createDependencies(
 }
 
 describe("receiptParsingService", () => {
+  it("prefers a reconciled column layout over higher-confidence unstructured text", async () => {
+    const words: OcrRecognition["words"] = [
+      { text: "ITEM", confidence: 0.9, bbox: { x0: 10, y0: 20, x1: 60, y1: 40 }, lineIndex: 1 },
+      { text: "QTY", confidence: 0.9, bbox: { x0: 120, y0: 20, x1: 150, y1: 40 }, lineIndex: 1 },
+      { text: "AMOUNT", confidence: 0.9, bbox: { x0: 250, y0: 20, x1: 320, y1: 40 }, lineIndex: 1 },
+      { text: "Burger", confidence: 0.88, bbox: { x0: 10, y0: 50, x1: 80, y1: 70 }, lineIndex: 2 },
+      { text: "2", confidence: 0.9, bbox: { x0: 125, y0: 50, x1: 135, y1: 70 }, lineIndex: 2 },
+      { text: "350.00", confidence: 0.88, bbox: { x0: 260, y0: 50, x1: 320, y1: 70 }, lineIndex: 2 },
+      { text: "TOTAL", confidence: 0.9, bbox: { x0: 180, y0: 80, x1: 235, y1: 100 }, lineIndex: 3 },
+      { text: "350.00", confidence: 0.9, bbox: { x0: 260, y0: 80, x1: 320, y1: 100 }, lineIndex: 3 }
+    ];
+    const dependencies = createDependencies(
+      [
+        { name: "original", imageDataUrl: "original-image" },
+        { name: "high-contrast", imageDataUrl: "layout-image" }
+      ],
+      async (imageDataUrl) => imageDataUrl === "original-image"
+        ? {
+            text: "CAFE\nNoise 999.00\nTOTAL 350.00",
+            confidence: 0.99,
+            lines: [],
+            words: []
+          }
+        : {
+            text: "CAFE\nITEM QTY AMOUNT\nBurger 2 350.00\nTOTAL 350.00",
+            confidence: 0.88,
+            lines: ["CAFE", "ITEM QTY AMOUNT", "Burger 2 350.00", "TOTAL 350.00"].map((text) => ({ text, confidence: 0.88 })),
+            words
+          }
+    );
+
+    const result = await parseCapturedReceipt(
+      { imageDataUrl: receiptImage, participantIds: ["maya"] },
+      dependencies
+    );
+
+    expect(result.receipt.items).toMatchObject([{ name: "Burger", quantity: 2, price: 350 }]);
+    expect(result.receipt.total).toBe(350);
+  });
+
   it("chooses the preprocessing candidate with the strongest structured parse", async () => {
     let activeRecognitions = 0;
     let maximumActiveRecognitions = 0;
@@ -94,6 +134,7 @@ describe("receiptParsingService", () => {
     expect(result.statuses).toEqual([
       "Scanning receipt",
       "OCR reading items",
+      "Analyzing receipt layout",
       "Ready to split"
     ]);
   });

@@ -3,6 +3,7 @@ import {
   type PreparedReceiptImage
 } from "../services/receiptImagePreprocessor";
 import { recognizeReceiptImage } from "../services/receiptOcrEngine";
+import { parseReceiptLayout } from "./receiptLayoutParser";
 import {
   parseReceiptText,
   scoreParsedReceipt,
@@ -30,6 +31,8 @@ interface ParsedCandidate {
   parsed: ParsedReceiptText;
   score: number;
 }
+
+const LAYOUT_STRUCTURE_BONUS = 0.04;
 
 const defaultDependencies: ReceiptParsingDependencies = {
   prepareReceiptImages,
@@ -63,7 +66,12 @@ function buildResult(
   const finalStatus: ParseStatus = needsManualReview
     ? "Needs manual review"
     : "Ready to split";
-  const statuses: ParseStatus[] = ["Scanning receipt", "OCR reading items", finalStatus];
+  const statuses: ParseStatus[] = [
+    "Scanning receipt",
+    "OCR reading items",
+    "Analyzing receipt layout",
+    finalStatus
+  ];
   const combinedWarnings = [...warnings, ...parsed.warnings];
 
   return {
@@ -116,6 +124,16 @@ export async function parseCapturedReceipt(
         participantIds: input.participantIds
       });
       candidates.push({ parsed, score: scoreParsedReceipt(parsed) });
+      const layoutParsed = parseReceiptLayout({
+        recognition,
+        participantIds: input.participantIds
+      });
+      if (layoutParsed) {
+        candidates.push({
+          parsed: layoutParsed,
+          score: Math.min(1, scoreParsedReceipt(layoutParsed) + LAYOUT_STRUCTURE_BONUS)
+        });
+      }
     } catch (error) {
       warnings.push(`${image.name} OCR failed: ${describeError(error)}`);
     }
