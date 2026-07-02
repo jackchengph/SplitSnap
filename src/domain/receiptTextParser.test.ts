@@ -46,6 +46,36 @@ describe("receiptTextParser", () => {
     expect(parsed.items.map((item) => item.name)).toEqual(["Burger"]);
   });
 
+  it("recognizes common OCR corruption in summary keywords", () => {
+    const parsed = parseReceiptText({
+      text: "BGC DINER\nBurger 350.00\nrOTAL 350.00\nCA5H 500.00",
+      confidence: 0.72,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items.map((item) => item.name)).toEqual(["Burger"]);
+    expect(parsed.total).toBe(350);
+  });
+
+  it("treats a damaged subtotal as a summary and ignores rows after grand total", () => {
+    const parsed = parseReceiptText({
+      text: [
+        "CAFE",
+        "JASMINE MT 24000",
+        "SUB [01 24000",
+        "T0TAL SARES 24000",
+        "cal 100000",
+        "Tote No 0 3"
+      ].join("\n"),
+      confidence: 0.55,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items.map((item) => item.name)).toEqual(["JASMINE MT"]);
+    expect(parsed.subtotal).toBe(24000);
+    expect(parsed.total).toBe(24000);
+  });
+
   it("returns an editable empty row when no items can be parsed", () => {
     const parsed = parseReceiptText({ text: "blur ??", confidence: 0.1, participantIds: ["maya"] });
 

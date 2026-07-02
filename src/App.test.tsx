@@ -159,7 +159,10 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: /Scan a receipt/i }));
 
     expect(screen.getByRole("heading", { name: /Scan receipt/i })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Capture receipt/i }));
+    await user.upload(
+      screen.getByLabelText(/Upload receipt photo/i),
+      new File(["receipt"], "receipt.png", { type: "image/png" })
+    );
     expect(
       await screen.findByRole("heading", { level: 1, name: /Scanned receipt/i })
     ).toBeInTheDocument();

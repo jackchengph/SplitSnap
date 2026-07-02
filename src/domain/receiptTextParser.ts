@@ -78,6 +78,17 @@ const totalMatcher = buildAnchoredMatcher(TOTAL_LABELS);
 const paymentMatcher = buildAnchoredMatcher(PAYMENT_LABELS);
 const metadataMatcher = buildAnchoredMatcher(METADATA_LABELS);
 
+function normalizeReceiptKeywordLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^sub\s+[[\]t7o0il1]{2,}/i, "subtotal")
+    .replace(/^sub\s*[t7][o0][t7]al\b/i, "subtotal")
+    .replace(/^[t7r][o0]tal\b/i, "total")
+    .replace(/^ca[s5]h\b/i, "cash")
+    .replace(/^va[t7]\b/i, "vat")
+    .replace(/^[t7]a[xk]\b/i, "tax");
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -150,21 +161,23 @@ function parseQuantity(name: string): { quantity: number; name: string } {
 }
 
 function isSummaryLine(line: string): boolean {
+  const normalizedLine = normalizeReceiptKeywordLine(line);
   return (
-    subtotalMatcher.test(line) ||
-    taxMatcher.test(line) ||
-    serviceChargeMatcher.test(line) ||
-    totalMatcher.test(line)
+    subtotalMatcher.test(normalizedLine) ||
+    taxMatcher.test(normalizedLine) ||
+    serviceChargeMatcher.test(normalizedLine) ||
+    totalMatcher.test(normalizedLine)
   );
 }
 
 export type ReceiptSummaryField = "subtotal" | "tax" | "serviceCharge" | "total";
 
 export function classifyReceiptSummaryLine(line: string): ReceiptSummaryField | undefined {
-  if (subtotalMatcher.test(line)) return "subtotal";
-  if (taxMatcher.test(line)) return "tax";
-  if (serviceChargeMatcher.test(line)) return "serviceCharge";
-  if (totalMatcher.test(line)) return "total";
+  const normalizedLine = normalizeReceiptKeywordLine(line);
+  if (subtotalMatcher.test(normalizedLine)) return "subtotal";
+  if (taxMatcher.test(normalizedLine)) return "tax";
+  if (serviceChargeMatcher.test(normalizedLine)) return "serviceCharge";
+  if (totalMatcher.test(normalizedLine)) return "total";
   return undefined;
 }
 
@@ -173,7 +186,7 @@ export function isReceiptExcludedLine(line: string): boolean {
 }
 
 function isPaymentLine(line: string): boolean {
-  return paymentMatcher.test(line);
+  return paymentMatcher.test(normalizeReceiptKeywordLine(line));
 }
 
 function isMetadataLine(line: string): boolean {
@@ -226,29 +239,33 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
   let total = 0;
   let foundExplicitSubtotal = false;
   let foundExplicitTotal = false;
+  let pastGrandTotal = false;
 
   for (const line of lines) {
     const parsedMoney = parseReceiptMoney(line);
+    const normalizedLine = normalizeReceiptKeywordLine(line);
+    if (pastGrandTotal) continue;
 
-    if (parsedMoney && subtotalMatcher.test(line)) {
+    if (parsedMoney && subtotalMatcher.test(normalizedLine)) {
       subtotal = parsedMoney.amount;
       foundExplicitSubtotal = true;
       continue;
     }
 
-    if (parsedMoney && taxMatcher.test(line)) {
+    if (parsedMoney && taxMatcher.test(normalizedLine)) {
       tax = parsedMoney.amount;
       continue;
     }
 
-    if (parsedMoney && serviceChargeMatcher.test(line)) {
+    if (parsedMoney && serviceChargeMatcher.test(normalizedLine)) {
       serviceCharge = parsedMoney.amount;
       continue;
     }
 
-    if (parsedMoney && totalMatcher.test(line)) {
+    if (parsedMoney && totalMatcher.test(normalizedLine)) {
       total = parsedMoney.amount;
       foundExplicitTotal = true;
+      pastGrandTotal = true;
       continue;
     }
 

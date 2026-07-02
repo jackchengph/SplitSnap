@@ -8,9 +8,15 @@ interface ReceiptScannerProps {
   onHome: () => void;
 }
 
-function fallbackReceiptImage(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960" viewBox="0 0 720 960"><rect width="720" height="960" fill="#f9faf7"/><rect x="124" y="96" width="472" height="768" rx="18" fill="#fff" stroke="#1f2933" stroke-width="6"/><text x="360" y="172" text-anchor="middle" font-family="Arial" font-size="38" font-weight="700">Sora Sushi Bar</text><text x="180" y="260" font-family="Arial" font-size="30">Sushi platter</text><text x="540" y="260" font-family="Arial" font-size="30" text-anchor="end">1200</text><text x="180" y="324" font-family="Arial" font-size="30">Tonkotsu ramen</text><text x="540" y="324" font-family="Arial" font-size="30" text-anchor="end">620</text><text x="180" y="388" font-family="Arial" font-size="30">Tempura basket</text><text x="540" y="388" font-family="Arial" font-size="30" text-anchor="end">720</text><text x="180" y="452" font-family="Arial" font-size="30">Iced tea pitcher</text><text x="540" y="452" font-family="Arial" font-size="30" text-anchor="end">420</text><text x="180" y="516" font-family="Arial" font-size="30">Matcha cheesecake</text><text x="540" y="516" font-family="Arial" font-size="30" text-anchor="end">1020</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string"
+      ? resolve(reader.result)
+      : reject(new Error("Receipt image could not be read."));
+    reader.onerror = () => reject(reader.error ?? new Error("Receipt image could not be read."));
+    reader.readAsDataURL(file);
+  });
 }
 
 export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }: ReceiptScannerProps) {
@@ -18,13 +24,15 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraMessage, setCameraMessage] = useState("Starting camera");
+  const [uploadError, setUploadError] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function startCamera() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraMessage("Camera is unavailable here. You can still use the capture button to test the parsing flow.");
+        setCameraMessage("Camera is unavailable here. Upload a receipt photo instead.");
         return;
       }
 
@@ -45,7 +53,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
         }
         setCameraMessage("Camera ready");
       } catch {
-        setCameraMessage("Camera permission was denied. Use the capture button when you are ready to continue with a sample scan.");
+        setCameraMessage("Camera permission was denied. Upload a receipt photo instead.");
       }
     }
 
@@ -57,6 +65,32 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
     };
   }, []);
 
+  async function submitImage(imageDataUrl: string) {
+    setUploadError("");
+    setIsProcessing(true);
+    try {
+      await onCapture(imageDataUrl);
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  async function handleUpload(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Choose a receipt image file.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadError("Receipt images must be 15 MB or smaller.");
+      return;
+    }
+    try {
+      await submitImage(await readFileAsDataUrl(file));
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Receipt image could not be read.");
+    }
+  }
+
   function captureFrame() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -67,12 +101,13 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
       const context = canvas.getContext("2d");
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        void onCapture(canvas.toDataURL("image/png"));
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        void submitImage(canvas.toDataURL("image/png"));
         return;
       }
     }
 
-    void onCapture(fallbackReceiptImage());
+    setUploadError("Camera is not ready. Upload a receipt photo instead.");
   }
 
   return (
@@ -105,10 +140,23 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
               Align the whole receipt inside the highlighted frame, then capture. SplitSnap compares multiple image treatments, receipt columns, and totals; uncertain rows stay editable.
             </p>
           </div>
-          <button type="button" onClick={captureFrame}>
-            Capture receipt
+          <button type="button" onClick={captureFrame} disabled={isProcessing}>
+            {isProcessing ? "Reading receipt..." : "Capture receipt"}
           </button>
         </div>
+        <label className="upload-control">
+          Upload receipt photo
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={isProcessing}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleUpload(file);
+            }}
+          />
+        </label>
+        {uploadError ? <div className="notice warning" role="alert">{uploadError}</div> : null}
         <div className="parse-steps" aria-label="Receipt parse status">
           {["Scanning receipt", "OCR reading items", "Analyzing receipt layout", "Needs manual review", "Ready to split"].map(
             (status) => (

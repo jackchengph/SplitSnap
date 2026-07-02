@@ -74,7 +74,11 @@ describe("recognizeReceiptImage", () => {
       ]
     });
     expect(adapter.createWorker).toHaveBeenCalledWith("eng");
-    expect(worker.setParameters).toHaveBeenCalledWith({ preserve_interword_spaces: "1" });
+    expect(worker.setParameters).toHaveBeenCalledWith({
+      preserve_interword_spaces: "1",
+      tessedit_pageseg_mode: "6",
+      user_defined_dpi: "300"
+    });
     expect(worker.recognize).toHaveBeenCalledWith("data:image/png;base64,abc", {}, { text: true, blocks: true });
     expect(worker.terminate).toHaveBeenCalledOnce();
   });

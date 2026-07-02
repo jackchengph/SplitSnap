@@ -58,7 +58,7 @@ interface TesseractWorker {
     options?: Record<string, never>,
     output?: { text?: boolean; blocks?: boolean }
   ): Promise<TesseractRecognitionResult>;
-  setParameters?(parameters: { preserve_interword_spaces: string }): Promise<unknown>;
+  setParameters?(parameters: Record<string, string>): Promise<unknown>;
   terminate(): Promise<unknown>;
 }
 
@@ -81,7 +81,11 @@ export async function recognizeReceiptImage(
 
   try {
     worker = await adapter.createWorker("eng");
-    await worker.setParameters?.({ preserve_interword_spaces: "1" });
+    await worker.setParameters?.({
+      preserve_interword_spaces: "1",
+      tessedit_pageseg_mode: "6",
+      user_defined_dpi: "300"
+    });
     const result = await worker.recognize(imageDataUrl, {}, { text: true, blocks: true });
     return normalizeRecognition(result.data);
   } finally {
