@@ -22,7 +22,7 @@ interface SplitReviewPageProps {
   notifications: Notification[];
   paymentProofs: Record<string, PaymentProof>;
   onHome: () => void;
-  onUpload: (fileName: string) => void;
+  onUpload: (imageDataUrl: string) => Promise<void> | void;
   onToggleParticipant: (itemId: string, participantId: string) => void;
   onUpdatePrice: (itemId: string, price: number) => void;
   onUpdateName: (itemId: string, name: string) => void;

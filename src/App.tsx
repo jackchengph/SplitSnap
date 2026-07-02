@@ -18,6 +18,10 @@ import {
   getSeedMenu,
   getSeedRestaurant
 } from "./domain/restaurantCatalog";
+import type {
+  CaptureInput,
+  ParseReceiptResult
+} from "./domain/receiptParsingService";
 import { seedRestaurants } from "./domain/restaurantData";
 import type { Restaurant } from "./domain/restaurantTypes";
 import { firebaseRuntime } from "./platform/firebase";
@@ -33,9 +37,11 @@ type FlowStep =
   | "review"
   | "participant";
 
-export function SplitSnapApp() {
+type ReceiptParser = (input: CaptureInput) => Promise<ParseReceiptResult>;
+
+export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser }) {
   const session = useSession();
-  const state = useSplitSnapState();
+  const state = useSplitSnapState({ parseReceipt });
   const [currentPage, setCurrentPage] = useState<AppPage>("home");
   const [flowStep, setFlowStep] = useState<FlowStep>("none");
   const [selectedRestaurant, setSelectedRestaurant] =
@@ -164,7 +170,7 @@ export function SplitSnapApp() {
         notifications={state.notifications}
         paymentProofs={state.paymentProofs}
         onHome={goHome}
-        onUpload={state.simulateUpload}
+        onUpload={state.uploadReceipt}
         onToggleParticipant={state.toggleItemParticipant}
         onUpdatePrice={state.updateItemPrice}
         onUpdateName={state.updateItemName}
@@ -264,17 +270,19 @@ export function SplitSnapApp() {
 
 interface AppProps {
   allowLocalPreview?: boolean;
+  parseReceipt?: ReceiptParser;
 }
 
 export default function App({
-  allowLocalPreview = import.meta.env.DEV
+  allowLocalPreview = import.meta.env.DEV,
+  parseReceipt
 }: AppProps) {
   return (
     <SessionProvider
       cloudConfigured={firebaseRuntime.configured}
       allowLocalPreview={allowLocalPreview}
     >
-      <SplitSnapApp />
+      <SplitSnapApp parseReceipt={parseReceipt} />
     </SessionProvider>
   );
 }

@@ -1,13 +1,48 @@
+import { useState } from "react";
 import type { Receipt } from "../domain/types";
 
 interface ReceiptCaptureProps {
   receipt: Receipt;
-  onUpload: (fileName: string) => void;
+  onUpload: (imageDataUrl: string) => Promise<void> | void;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error("Receipt image could not be read."));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Receipt image could not be read."));
+    reader.readAsDataURL(file);
+  });
 }
 
 export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
+  const [uploadError, setUploadError] = useState("");
   const lowConfidence =
     receipt.ocrConfidence < 0.85 || receipt.items.some((item) => item.needsReview);
+
+  async function handleUpload(file: File): Promise<void> {
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Choose an image file for receipt OCR.");
+      return;
+    }
+
+    setUploadError("");
+    try {
+      const imageDataUrl = await readFileAsDataUrl(file);
+      await onUpload(imageDataUrl);
+    } catch (error) {
+      setUploadError(
+        error instanceof Error ? error.message : "Receipt image could not be uploaded."
+      );
+    }
+  }
 
   return (
     <section className="panel">
@@ -36,11 +71,16 @@ export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) {
-              onUpload(file.name);
+              void handleUpload(file);
             }
           }}
         />
       </label>
+      {uploadError ? (
+        <div className="notice warning" role="alert">
+          {uploadError}
+        </div>
+      ) : null}
       <div className={lowConfidence ? "notice warning" : "notice"}>
         OCR confidence: {Math.round(receipt.ocrConfidence * 100)}%.
         {lowConfidence

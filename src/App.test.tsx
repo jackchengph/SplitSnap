@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ParseReceiptResult } from "./domain/receiptParsingService";
 
 async function enterPreview(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
@@ -17,7 +18,13 @@ async function selectDinnerFriend(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /Next: add the bill/i }));
 }
 
-async function renderApp(props?: { allowLocalPreview?: boolean }) {
+async function renderApp(props?: {
+  allowLocalPreview?: boolean;
+  parseReceipt?: (input: {
+    imageDataUrl: string;
+    participantIds: string[];
+  }) => Promise<ParseReceiptResult>;
+}) {
   const module = await import("./App");
   render(<module.default {...props} />);
 }
@@ -113,7 +120,39 @@ describe("App", () => {
 
   it("keeps receipt scanning as an alternative source", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    const parseReceipt = vi.fn().mockImplementation(
+      async ({ imageDataUrl, participantIds }) =>
+        ({
+          receipt: {
+            id: "receipt-manual-review",
+            merchantName: "Scanned receipt",
+            date: "2026-07-02",
+            imageUrl: imageDataUrl,
+            ocrConfidence: 0,
+            parserMode: "camera-ocr",
+            parseStatus: "Needs manual review",
+            parseWarnings: ["Could not find item rows in OCR text."],
+            items: [
+              {
+                id: "unrecognized-item-1",
+                name: "Unrecognized item",
+                quantity: 1,
+                price: 0,
+                assignedParticipantIds: participantIds,
+                confidence: 0,
+                parseSource: "ocr",
+                needsReview: true
+              }
+            ],
+            tax: 0,
+            serviceCharge: 0,
+            total: 0
+          },
+          statuses: ["Scanning receipt", "OCR reading items", "Needs manual review"],
+          warnings: ["Could not find item rows in OCR text."]
+        }) satisfies ParseReceiptResult
+    );
+    await renderApp({ parseReceipt });
     await enterPreview(user);
     await user.click(screen.getByRole("button", { name: /Start a split/i }));
     await selectDinnerFriend(user);
@@ -122,8 +161,10 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: /Scan receipt/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Capture receipt/i }));
     expect(
-      await screen.findByRole("heading", { level: 1, name: /Sora Sushi Bar/i })
+      await screen.findByRole("heading", { level: 1, name: /Scanned receipt/i })
     ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Unrecognized item")).toBeInTheDocument();
+    expect(parseReceipt).toHaveBeenCalledOnce();
   });
 
   it("opens a participant breakdown from Activity and validates proof", async () => {

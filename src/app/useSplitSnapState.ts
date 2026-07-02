@@ -446,23 +446,8 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }
   }
 
-  function simulateUpload(fileName: string) {
-    const warning = "Uploaded receipt has not been OCR processed. Enter item details manually.";
-    const recoveryReceipt = buildCaptureRecoveryReceipt(
-      "",
-      activeGroup.participantIds,
-      warning
-    );
-
-    setReceipt({
-      ...recoveryReceipt,
-      id: `upload-${Date.now()}`,
-      merchantName: fileName.replace(/\.[^.]+$/, "") || "Uploaded receipt",
-      parserMode: "manual"
-    });
-    setParseStatus("Needs manual review");
-    setParseWarnings([warning]);
-    setNotifications([]);
+  async function uploadReceipt(imageDataUrl: string) {
+    await captureReceipt(imageDataUrl);
   }
 
   return {
@@ -497,6 +482,6 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     sendReminder,
     markPaid,
     submitPaymentProof,
-    simulateUpload
+    uploadReceipt
   };
 }

@@ -209,18 +209,54 @@ describe("useSplitSnapState", () => {
     expect(result.current.notifications).toEqual([]);
   });
 
-  it("does not substitute demo rows for an upload that has not been OCR processed", () => {
-    const { result } = renderHook(() => useSplitSnapState());
+  it("passes uploaded image bytes through the OCR parser without demo rows", async () => {
+    const uploadedImage = "data:image/png;base64,dXBsb2FkZWQtcmVjZWlwdA==";
+    const parseReceipt = vi.fn().mockResolvedValue({
+      receipt: {
+        id: "receipt-upload-review",
+        merchantName: "Scanned receipt",
+        date: "2026-07-02",
+        imageUrl: uploadedImage,
+        ocrConfidence: 0,
+        parserMode: "camera-ocr",
+        parseStatus: "Needs manual review",
+        parseWarnings: ["worker unavailable"],
+        items: [
+          {
+            id: "unrecognized-item-1",
+            name: "Unrecognized item",
+            quantity: 1,
+            price: 0,
+            assignedParticipantIds: ["maya", "nico", "bea"],
+            confidence: 0,
+            parseSource: "ocr",
+            needsReview: true
+          }
+        ],
+        tax: 0,
+        serviceCharge: 0,
+        total: 0
+      },
+      statuses: ["Scanning receipt", "OCR reading items", "Needs manual review"],
+      warnings: ["worker unavailable"]
+    } satisfies ParseReceiptResult);
+    const { result } = renderHook(() => useSplitSnapState({ parseReceipt }));
 
-    act(() => {
-      result.current.simulateUpload("unread-receipt.jpg");
+    await act(async () => {
+      await result.current.uploadReceipt(uploadedImage);
     });
 
+    expect(parseReceipt).toHaveBeenCalledWith({
+      imageDataUrl: uploadedImage,
+      participantIds: ["maya", "nico", "bea"]
+    });
+    expect(result.current.capturedReceiptImageUrl).toBe(uploadedImage);
+    expect(result.current.receipt.imageUrl).toBe(uploadedImage);
     expect(result.current.receipt.items).toMatchObject([
       { name: "Unrecognized item", price: 0, needsReview: true }
     ]);
     expect(result.current.receipt.items.some((item) => item.name === "Sushi platter")).toBe(false);
-    expect(result.current.parseWarnings.join(" ")).not.toMatch(/yolo/i);
+    expect(result.current.notifications).toEqual([]);
   });
 
   it("creates a reminder and marks participant reminded", () => {
