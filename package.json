@@ -16,6 +16,7 @@
     "verify": "npm run test:run && npm run test:rules && npm run build"
   },
   "dependencies": {
+    "@google/genai": "^2.10.0",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.0.0",
     "heic2any": "^0.0.4",
