@@ -166,6 +166,9 @@ function parseRow(value: unknown, index: number): ParsedGeminiReceiptRow {
     `rows[${index}].quantity`
   );
   const amount = roundMoney(asFiniteNumber(value.amount, `rows[${index}].amount`));
+  if (amount < 0) {
+    throw new InvalidGeminiReceiptError(`rows[${index}].amount must not be negative.`);
+  }
   const confidence = asConfidence(value.confidence, `rows[${index}].confidence`);
 
   return { kind, label, name, quantity, amount, confidence, quantityWasNormalized };

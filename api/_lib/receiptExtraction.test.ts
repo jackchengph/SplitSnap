@@ -107,6 +107,7 @@ describe("normalizeGeminiReceipt", () => {
     { ...basePayload(), rows: "not rows" },
     { ...basePayload(), rows: Array.from({ length: 201 }, () => basePayload().rows[0]) },
     { ...basePayload(), rows: [{ ...basePayload().rows[0], amount: Number.NaN }] },
+    { ...basePayload(), rows: basePayload().rows.map((row) => row.kind === "vat" ? { ...row, amount: -1 } : row) },
     { ...basePayload(), rows: [{ ...basePayload().rows[0], label: "x".repeat(301) }] }
   ])("rejects malformed model output", (payload) => {
     expect(() => normalizeGeminiReceipt(payload)).toThrow(InvalidGeminiReceiptError);
