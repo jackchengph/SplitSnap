@@ -82,6 +82,12 @@ export function ParticipantDashboard({
                 <span>Service share</span>
                 <strong>{formatCurrency(splitResult.serviceShare)}</strong>
               </li>
+              {(splitResult.discountShare ?? 0) > 0 ? (
+                <li>
+                  <span>Discount share</span>
+                  <strong>-{formatCurrency(splitResult.discountShare ?? 0)}</strong>
+                </li>
+              ) : null}
             </ul>
           ) : (
             <p className="muted">No unpaid balance for this participant.</p>

@@ -206,8 +206,8 @@ describe("receiptParsingService", () => {
       merchantName: "Cafe Luna",
       imageUrl: receiptImage,
       parserMode: "camera-ocr",
-      tax: 0,
-      serviceCharge: 0,
+      tax: 36,
+      serviceCharge: 24,
       total: 360,
       parseStatus: "Ready to split"
     });

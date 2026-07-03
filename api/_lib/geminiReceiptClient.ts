@@ -10,7 +10,7 @@ const model = "gemini-3.5-flash";
 
 const receiptPrompt = `Read this restaurant receipt and return every visible row in printed order.
 Use kind=item only for purchased menu items. Stop assignable items at the first subtotal row.
-Label subtotal, VAT, service charge, and Amount Due with their matching summary kinds.
+Label subtotal, discount, VAT, service charge, and Amount Due with their matching summary kinds. Return discount as a positive absolute amount.
 Rows after subtotal must be summary or other rows, never purchased items.
 Do not invent obscured names, quantities, or amounts. Use confidence from 0 to 1.`;
 
@@ -19,7 +19,7 @@ const rowSchema = {
   properties: {
     kind: {
       type: "string",
-      enum: ["item", "subtotal", "vat", "service_charge", "amount_due", "other"]
+      enum: ["item", "subtotal", "discount", "vat", "service_charge", "amount_due", "other"]
     },
     label: { type: "string" },
     name: { type: ["string", "null"] },

@@ -16,6 +16,7 @@ const RECONCILIATION_WARNING = "Receipt totals do not reconcile with parsed item
 export type GeminiReceiptRowKind =
   | "item"
   | "subtotal"
+  | "discount"
   | "vat"
   | "service_charge"
   | "amount_due"
@@ -112,6 +113,7 @@ function asKind(value: unknown, fieldName: string): GeminiReceiptRowKind {
   if (
     value !== "item" &&
     value !== "subtotal" &&
+    value !== "discount" &&
     value !== "vat" &&
     value !== "service_charge" &&
     value !== "amount_due" &&
@@ -234,6 +236,7 @@ function semanticRowKind(row: ParsedGeminiReceiptRow): GeminiReceiptRowKind {
 
   if (/\b(?:amount|balance)\s+due\b/i.test(label)) return "amount_due";
   if (/^(?:sub[\s-]*total|total)\b/i.test(label)) return "subtotal";
+  if (/^(?:discount|disc)\b/i.test(label)) return "discount";
   if (/^(?:service\s+(?:charge|fee)|svc\s+charge)\b/i.test(label)) return "service_charge";
   if (/^(?:vat|tax)\b/i.test(label)) return "vat";
   if (/^(?:price\s+w\/o|price\s+without|net\s+amount|vatable|vat\s+able|zero[\s-]*rated)\b/i.test(label)) {
@@ -249,6 +252,7 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
   const items: NormalizedReceiptItem[] = [];
   let tax = 0;
   let serviceCharge = 0;
+  let discount = 0;
   let total: number | undefined;
   let seenSubtotal = false;
   let seenVat = false;
@@ -296,6 +300,10 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
         seenVat = true;
         confidenceValues.push(row.confidence);
         break;
+      case "discount":
+        discount = row.amount;
+        confidenceValues.push(row.confidence);
+        break;
       case "service_charge":
         if (seenServiceCharge) continue;
 
@@ -325,10 +333,10 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
   }
 
   const exclusiveTaxTotal = roundMoney(
-    items.reduce((sum, item) => sum + item.amount, 0) + tax + serviceCharge
+    items.reduce((sum, item) => sum + item.amount, 0) - discount + tax + serviceCharge
   );
   const inclusiveTaxTotal = roundMoney(
-    items.reduce((sum, item) => sum + item.amount, 0) + serviceCharge
+    items.reduce((sum, item) => sum + item.amount, 0) - discount + serviceCharge
   );
   let normalizedItems = items;
 
@@ -351,6 +359,7 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
     items: normalizedItems,
     tax,
     serviceCharge,
+    discount,
     total,
     confidence: calculateConfidence(confidenceValues),
     warnings

@@ -82,6 +82,23 @@ describe("calculateSplit", () => {
     expect(summary.warnings).not.toContainEqual(expect.objectContaining({ type: "total-mismatch" }));
   });
 
+  it("allocates receipt discounts proportionally", () => {
+    const discounted: Receipt = {
+      ...receipt,
+      taxIncluded: true,
+      discount: 40,
+      tax: 30,
+      serviceCharge: 0,
+      total: 260
+    };
+
+    const summary = calculateSplit(discounted, group);
+
+    expect(summary.calculatedTotal).toBe(260);
+    expect(summary.results.reduce((total, result) => total + result.totalOwed, 0)).toBeCloseTo(260, 2);
+    expect(summary.results.reduce((total, result) => total + (result.discountShare ?? 0), 0)).toBeCloseTo(40, 1);
+  });
+
   it("does not show the payer owing themselves", () => {
     const summary = calculateSplit(receipt, group);
     expect(summary.results.some((result) => result.participantId === "payer")).toBe(false);

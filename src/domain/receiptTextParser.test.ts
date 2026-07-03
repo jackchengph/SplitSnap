@@ -48,7 +48,7 @@ describe("receiptTextParser", () => {
       { name: "Americano", quantity: 2, price: 240, needsReview: false },
       { name: "Croissant", quantity: 1, price: 180, needsReview: false }
     ]);
-    expect(parsed).toMatchObject({ subtotal: 420, tax: 0, serviceCharge: 0, total: 512.4 });
+    expect(parsed).toMatchObject({ subtotal: 420, tax: 50.4, serviceCharge: 42, total: 512.4 });
   });
 
   it("normalizes OCR-confused price characters without changing names", () => {
@@ -120,8 +120,8 @@ describe("receiptTextParser", () => {
 
     expect(parsed.items.map((item) => item.name)).toEqual(["Burger", "Fries"]);
     expect(parsed.subtotal).toBe(450);
-    expect(parsed.tax).toBe(0);
-    expect(parsed.serviceCharge).toBe(0);
+    expect(parsed.tax).toBe(54);
+    expect(parsed.serviceCharge).toBe(20);
     expect(parsed.total).toBe(524);
   });
 
@@ -165,6 +165,33 @@ describe("receiptTextParser", () => {
     expect(parsed.items.map((item) => item.name)).toEqual(["Burger"]);
     expect(parsed.subtotal).toBe(350);
     expect(parsed.total).toBe(350);
+  });
+
+  it("parses the Cara Mia receipt format without assigning summaries", () => {
+    const parsed = parseReceiptText({
+      text: [
+        "Cara Mia Sales and Services Inc.",
+        "Item Qty Price Amount",
+        "Midnight Dream (Whole) 1 1065.00 1065.00",
+        "ECO 1 55.00 55.00",
+        "Sub Total 1120.00",
+        "Price w/o VAT&SC 1012.48",
+        "Discount -223.99",
+        "Net Amount 788.49",
+        "12%VAT 107.52",
+        "AMOUNT DUE 896.01",
+        "VATable Sale 9856.01",
+        "Zero-Rated Sales 0.00"
+      ].join("\n"),
+      confidence: 0.9,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items.map((item) => item.name)).toEqual([
+      "Midnight Dream (Whole)",
+      "ECO"
+    ]);
+    expect(parsed).toMatchObject({ subtotal: 1120, discount: 223.99, tax: 107.52, total: 896.01 });
   });
 
   it("returns an editable empty row when no items can be parsed", () => {

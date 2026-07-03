@@ -13,6 +13,7 @@ export interface NormalizedReceiptExtraction {
   items: NormalizedReceiptItem[];
   tax: number;
   serviceCharge: number;
+  discount?: number;
   total: number;
   confidence: number;
   warnings: string[];

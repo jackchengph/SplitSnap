@@ -85,6 +85,20 @@ describe("normalizeGeminiReceipt", () => {
     expect(result.total).toBe(570);
   });
 
+  it("maps a receipt discount as a positive summary value", () => {
+    const payload = basePayload();
+    payload.rows.splice(2, 0, {
+      kind: "discount",
+      label: "Discount",
+      name: null,
+      quantity: null,
+      amount: 223.99,
+      confidence: 0.99
+    });
+
+    expect(normalizeGeminiReceipt(payload).discount).toBe(223.99);
+  });
+
   it("normalizes malformed item quantities and marks the row for review", () => {
     const payload = basePayload();
     payload.rows[0] = { ...payload.rows[0], quantity: 1.8, confidence: 0.7 };

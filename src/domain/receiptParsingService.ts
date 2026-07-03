@@ -96,7 +96,11 @@ function buildLocalResult(
       parseWarnings: combinedWarnings,
       items: parsed.items,
       tax: parsed.tax,
+      taxIncluded:
+        parsed.tax > 0 &&
+        Math.abs(parsed.items.reduce((sum, item) => sum + item.price, 0) - parsed.discount + parsed.serviceCharge - parsed.total) <= 0.05,
       serviceCharge: parsed.serviceCharge,
+      discount: parsed.discount,
       total: parsed.total
     },
     statuses,
@@ -128,7 +132,7 @@ function buildGeminiResult(
   const itemTotal = items.reduce((total, item) => total + item.price, 0);
   const taxIncluded =
     extraction.tax > 0 &&
-    Math.abs(itemTotal + extraction.serviceCharge - extraction.total) <= 0.05;
+    Math.abs(itemTotal - (extraction.discount ?? 0) + extraction.serviceCharge - extraction.total) <= 0.05;
   const finalStatus: ParseStatus = needsManualReview ? "Needs manual review" : "Ready to split";
   reportStatus(input, statuses, finalStatus);
 
@@ -146,6 +150,7 @@ function buildGeminiResult(
       tax: extraction.tax,
       taxIncluded,
       serviceCharge: extraction.serviceCharge,
+      discount: extraction.discount ?? 0,
       total: extraction.total
     },
     statuses,

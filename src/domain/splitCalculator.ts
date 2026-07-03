@@ -74,12 +74,13 @@ export function calculateSplit(
 
   const receiptSubtotal = sum(receipt.items.map((item) => item.price));
   const additiveTax = receipt.taxIncluded ? 0 : receipt.tax;
-  const calculatedTotal = roundMoney(receiptSubtotal + additiveTax + receipt.serviceCharge);
+  const discount = receipt.discount ?? 0;
+  const calculatedTotal = roundMoney(receiptSubtotal - discount + additiveTax + receipt.serviceCharge);
 
   if (Math.abs(calculatedTotal - receipt.total) > 0.01) {
     warnings.push({
       type: "total-mismatch",
-      message: "Parsed items, tax, and service do not match the receipt total."
+      message: "Parsed items, discount, tax, and service do not match the receipt total."
     });
   }
 
@@ -100,7 +101,10 @@ export function calculateSplit(
         subtotal: roundMoney(subtotal),
         taxShare: roundMoney(additiveTax * proportion),
         serviceShare: roundMoney(receipt.serviceCharge * proportion),
-        totalOwed: roundMoney(subtotal + additiveTax * proportion + receipt.serviceCharge * proportion),
+        discountShare: roundMoney(discount * proportion),
+        totalOwed: roundMoney(
+          subtotal - discount * proportion + additiveTax * proportion + receipt.serviceCharge * proportion
+        ),
         status: statuses[participantId] ?? "unpaid"
       };
     })
@@ -108,7 +112,8 @@ export function calculateSplit(
 
   const displayedTotal = roundMoney(sum(results.map((result) => result.totalOwed)));
   const targetNonPayerTotal = roundMoney(
-    nonPayerAssignedSubtotal +
+    nonPayerAssignedSubtotal -
+      discount * (assignedSubtotal === 0 ? 0 : nonPayerAssignedSubtotal / assignedSubtotal) +
       additiveTax * (assignedSubtotal === 0 ? 0 : nonPayerAssignedSubtotal / assignedSubtotal) +
       receipt.serviceCharge * (assignedSubtotal === 0 ? 0 : nonPayerAssignedSubtotal / assignedSubtotal)
   );

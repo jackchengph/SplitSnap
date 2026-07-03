@@ -73,6 +73,7 @@ export interface Receipt {
   tax: number;
   taxIncluded?: boolean;
   serviceCharge: number;
+  discount?: number;
   total: number;
 }
 
@@ -88,6 +89,7 @@ export interface SplitResult {
   subtotal: number;
   taxShare: number;
   serviceShare: number;
+  discountShare?: number;
   totalOwed: number;
   status: PaymentStatus;
 }

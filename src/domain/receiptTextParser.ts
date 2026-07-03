@@ -8,6 +8,7 @@ const FALLBACK_MERCHANT_NAME = "Scanned receipt";
 const SUBTOTAL_LABELS = ["subtotal", "sub total", "sub-total"];
 const TAX_LABELS = ["vat", "tax"];
 const SERVICE_CHARGE_LABELS = ["service charge", "svc charge", "service fee"];
+const DISCOUNT_LABELS = ["discount", "disc"];
 const TOTAL_LABELS = ["total", "grand total"];
 const AMOUNT_DUE_LABELS = ["amount due", "total amount due", "balance due"];
 const NON_ASSIGNABLE_SUMMARY_LABELS = [
@@ -53,7 +54,7 @@ const METADATA_LABELS = [
 
 const quantityPrefixPattern = /^(?<quantity>\d+)\s*[xX]\s*/;
 const trailingMoneyPattern =
-  /(?<leading>.*?)(?:\s+|^)(?:(?:PHP|php|₱)\s*)?(?<money>[0-9OISl,]+(?:\.[0-9OISl]{2})?)\s*$/;
+  /(?<leading>.*?)(?:\s+|^)(?:(?:PHP|php|₱)\s*)?(?<sign>[-−]?)(?<money>[0-9OISl,]+(?:\.[0-9OISl]{2})?)\s*$/;
 
 export interface ReceiptTextInput {
   text: string;
@@ -67,6 +68,7 @@ export interface ParsedReceiptText {
   subtotal: number;
   tax: number;
   serviceCharge: number;
+  discount: number;
   total: number;
   confidence: number;
   warnings: string[];
@@ -92,6 +94,7 @@ function buildAnchoredMatcher(labels: string[]): RegExp {
 const subtotalMatcher = buildAnchoredMatcher(SUBTOTAL_LABELS);
 const taxMatcher = buildAnchoredMatcher(TAX_LABELS);
 const serviceChargeMatcher = buildAnchoredMatcher(SERVICE_CHARGE_LABELS);
+const discountMatcher = buildAnchoredMatcher(DISCOUNT_LABELS);
 const totalMatcher = buildAnchoredMatcher(TOTAL_LABELS);
 const amountDueMatcher = buildAnchoredMatcher(AMOUNT_DUE_LABELS);
 const nonAssignableSummaryMatcher = buildAnchoredMatcher(NON_ASSIGNABLE_SUMMARY_LABELS);
@@ -101,6 +104,7 @@ const metadataMatcher = buildAnchoredMatcher(METADATA_LABELS);
 function normalizeReceiptKeywordLine(line: string): string {
   return line
     .trim()
+    .replace(/^\d+(?:%|[xX])?\s*(?=vat)/i, "")
     .replace(/^\d+\s*(?:[xX]\s*)?(?=(?:sub|total|amount|vat|price|net|zero))/i, "")
     .replace(/^sub[\s-]*total\b/i, "subtotal")
     .replace(/^sub\s+[[\]t7o0il1]{2,}/i, "subtotal")
@@ -188,12 +192,24 @@ function parseColumnQuantity(name: string): { quantity: number; name: string } {
   return { quantity: Number(match.groups.quantity), name: name.slice(match[0].length).trim() };
 }
 
+function parseInlineReceiptColumns(value: string): { quantity: number; name: string } {
+  const match = value.match(
+    /^(?<name>.+?)\s+(?<quantity>\d+(?:\.00)?)\s+(?:[0-9,]+(?:\.[0-9]{2})?)$/
+  );
+  if (!match?.groups?.name || !match.groups.quantity) return parseQuantity(value);
+  return {
+    name: match.groups.name.trim(),
+    quantity: Math.max(1, Math.round(Number(match.groups.quantity)))
+  };
+}
+
 function isSummaryLine(line: string): boolean {
   const normalizedLine = normalizeReceiptKeywordLine(line);
   return (
     subtotalMatcher.test(normalizedLine) ||
     taxMatcher.test(normalizedLine) ||
     serviceChargeMatcher.test(normalizedLine) ||
+    discountMatcher.test(normalizedLine) ||
     totalMatcher.test(normalizedLine) ||
     amountDueMatcher.test(normalizedLine) ||
     nonAssignableSummaryMatcher.test(normalizedLine)
@@ -255,8 +271,14 @@ function totalsAreConsistent(parsed: ParsedReceiptText): boolean {
     return false;
   }
 
-  const components = roundMoney(parsed.subtotal + parsed.tax + parsed.serviceCharge);
-  return Math.abs(parsed.total - components) <= MONEY_TOLERANCE;
+  const exclusiveTax = roundMoney(
+    parsed.subtotal - parsed.discount + parsed.tax + parsed.serviceCharge
+  );
+  const inclusiveTax = roundMoney(parsed.subtotal - parsed.discount + parsed.serviceCharge);
+  return (
+    Math.abs(parsed.total - exclusiveTax) <= MONEY_TOLERANCE ||
+    Math.abs(parsed.total - inclusiveTax) <= MONEY_TOLERANCE
+  );
 }
 
 export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
@@ -271,6 +293,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
   let subtotal = 0;
   let tax = 0;
   let serviceCharge = 0;
+  let discount = 0;
   let total = 0;
   let foundExplicitSubtotal = false;
   let foundExplicitTotal = false;
@@ -311,6 +334,12 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
         total = parsedMoney.amount;
         foundExplicitTotal = true;
         pastGrandTotal = true;
+      } else if (parsedMoney && taxMatcher.test(normalizedLine)) {
+        tax = parsedMoney.amount;
+      } else if (parsedMoney && serviceChargeMatcher.test(normalizedLine)) {
+        serviceCharge = parsedMoney.amount;
+      } else if (parsedMoney && discountMatcher.test(normalizedLine)) {
+        discount = parsedMoney.amount;
       }
       continue;
     }
@@ -366,7 +395,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       continue;
     }
 
-    const quantityAndName = parseQuantity(parsedMoney.prefix);
+    const quantityAndName = parseInlineReceiptColumns(parsedMoney.prefix);
     if (!quantityAndName.name) {
       continue;
     }
@@ -391,6 +420,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       subtotal: 0,
       tax: 0,
       serviceCharge: 0,
+      discount: 0,
       total: 0,
       confidence: input.confidence,
       warnings,
@@ -404,7 +434,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
   }
 
   if (!foundExplicitTotal) {
-    total = roundMoney(subtotal + tax + serviceCharge);
+    total = roundMoney(subtotal - discount + tax + serviceCharge);
   }
 
   const parsed: ParsedReceiptText = {
@@ -413,6 +443,7 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
     subtotal,
     tax,
     serviceCharge,
+    discount,
     total,
     confidence: input.confidence,
     warnings,

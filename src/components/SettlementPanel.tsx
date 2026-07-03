@@ -52,6 +52,9 @@ export function SettlementPanel({ friends, split, onReminder, onMarkPaid }: Sett
                   ))}
                   <li>Tax share: {formatCurrency(result.taxShare)}</li>
                   <li>Service share: {formatCurrency(result.serviceShare)}</li>
+                  {(result.discountShare ?? 0) > 0 ? (
+                    <li>Discount share: -{formatCurrency(result.discountShare ?? 0)}</li>
+                  ) : null}
                 </ul>
               </details>
               <div className="button-row">
