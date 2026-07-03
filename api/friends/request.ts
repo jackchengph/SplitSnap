@@ -1,11 +1,11 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { friendshipIdFor } from "../../src/domain/friendship";
+import { friendshipIdFor } from "../../src/domain/friendship.js";
 import {
   requireUserId,
   type ApiRequest,
   type ApiResponse
-} from "../_lib/authenticatedRequest";
-import { adminFirestore } from "../_lib/firebaseAdmin";
+} from "../_lib/authenticatedRequest.js";
+import { adminFirestore } from "../_lib/firebaseAdmin.js";
 
 const invalidTargetError = "A valid target user is required.";
 const requestConflictError = "Friend request cannot be created.";

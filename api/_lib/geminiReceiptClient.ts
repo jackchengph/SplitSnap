@@ -1,10 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
-import type { NormalizedReceiptExtraction } from "../../src/domain/geminiReceiptTypes";
+import type { NormalizedReceiptExtraction } from "../../src/domain/geminiReceiptTypes.js";
 import {
   InvalidGeminiReceiptError,
   UnusableGeminiReceiptError,
   normalizeGeminiReceipt
-} from "./receiptExtraction";
+} from "./receiptExtraction.js";
 
 const model = "gemini-3.5-flash";
 

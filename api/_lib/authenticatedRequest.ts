@@ -1,4 +1,4 @@
-import { adminAuth } from "./firebaseAdmin";
+import { adminAuth } from "./firebaseAdmin.js";
 
 export interface ApiRequest {
   method?: string;

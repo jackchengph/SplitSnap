@@ -1,9 +1,9 @@
-import type { ApiRequest, ApiResponse } from "../_lib/authenticatedRequest";
+import type { ApiRequest, ApiResponse } from "../_lib/authenticatedRequest.js";
 import {
   GeminiConfigurationError,
   GeminiRateLimitError,
   extractReceiptWithGemini
-} from "../_lib/geminiReceiptClient";
+} from "../_lib/geminiReceiptClient.js";
 
 const maxImageBytes = 15 * 1024 * 1024;
 const imageDataUrlPattern = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;

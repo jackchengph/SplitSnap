@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import type { UserProfile } from "../../src/domain/accountTypes";
+import type { UserProfile } from "../../src/domain/accountTypes.js";
 import {
   requireUserId,
   type ApiRequest,
   type ApiResponse
-} from "../_lib/authenticatedRequest";
-import { adminAuth, adminFirestore } from "../_lib/firebaseAdmin";
+} from "../_lib/authenticatedRequest.js";
+import { adminAuth, adminFirestore } from "../_lib/firebaseAdmin.js";
 
 interface BootstrapBody {
   timezone?: unknown;

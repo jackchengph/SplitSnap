@@ -2,7 +2,7 @@ import type {
   FriendshipStatus,
   PublicUserProfile,
   UserProfile
-} from "./accountTypes";
+} from "./accountTypes.js";
 
 type FriendshipActor = "requester" | "recipient" | "member";
 

@@ -1,7 +1,7 @@
 import type {
   NormalizedReceiptExtraction,
   NormalizedReceiptItem
-} from "../../src/domain/geminiReceiptTypes";
+} from "../../src/domain/geminiReceiptTypes.js";
 
 const MAX_ROWS = 200;
 const MAX_LABEL_LENGTH = 300;
