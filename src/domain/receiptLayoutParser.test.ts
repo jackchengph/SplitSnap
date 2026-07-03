@@ -115,4 +115,23 @@ describe("parseReceiptLayout", () => {
     expect(parsed?.subtotal).toBe(350);
     expect(parsed?.total).toBe(392);
   });
+
+  it("does not assign numbered summary rows from OCR columns", () => {
+    const parsed = parseReceiptLayout({
+      recognition: recognition(
+        [
+          word("ITEM", 1, 10, 70), word("AMOUNT", 1, 260, 330),
+          word("Burger", 2, 10, 80), word("350.00", 2, 270, 330),
+          word("2", 3, 10, 20), word("SUB", 3, 30, 70), word("TOTAL", 3, 75, 130), word("350.00", 3, 270, 330),
+          word("VATable", 4, 10, 80), word("312.48", 4, 270, 330),
+          word("4", 5, 10, 20), word("AMOUNT", 5, 30, 100), word("DUE", 5, 105, 140), word("350.00", 5, 270, 330)
+        ],
+        ["BGC DINER", "ITEM AMOUNT", "Burger 350.00", "2 SUB TOTAL 350.00", "VATable 312.48", "4 AMOUNT DUE 350.00"]
+      ),
+      participantIds: ["maya"]
+    });
+
+    expect(parsed?.items.map((item) => item.name)).toEqual(["Burger"]);
+    expect(parsed?.total).toBe(350);
+  });
 });

@@ -69,6 +69,22 @@ describe("normalizeGeminiReceipt", () => {
     expect(result.total).toBe(570);
   });
 
+  it("recovers summary rows even when Gemini labels them as items", () => {
+    const payload = basePayload();
+    payload.rows = [
+      payload.rows[0],
+      { kind: "item", label: "2 SUB TOTAL", name: "Sub Total", quantity: 1, amount: 515, confidence: 0.99 },
+      { kind: "item", label: "12XVAT", name: "12XVAT", quantity: 1, amount: 55, confidence: 0.97 },
+      { kind: "item", label: "4 AMOUNT DUE", name: "Amount Due", quantity: 1, amount: 570, confidence: 0.99 }
+    ];
+
+    const result = normalizeGeminiReceipt(payload);
+
+    expect(result.items.map((item) => item.name)).toEqual(["Rosu 180 WH"]);
+    expect(result.tax).toBe(55);
+    expect(result.total).toBe(570);
+  });
+
   it("normalizes malformed item quantities and marks the row for review", () => {
     const payload = basePayload();
     payload.rows[0] = { ...payload.rows[0], quantity: 1.8, confidence: 0.7 };

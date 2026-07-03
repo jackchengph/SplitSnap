@@ -145,6 +145,28 @@ describe("receiptTextParser", () => {
     expect(parsed.total).toBe(504);
   });
 
+  it("excludes numbered and tax summary labels from assignments", () => {
+    const parsed = parseReceiptText({
+      text: [
+        "BGC DINER",
+        "Burger 350.00",
+        "2 SUB TOTAL 350.00",
+        "Price w/o VAT 312.48",
+        "Net Amount 312.48",
+        "12XVAT 37.52",
+        "VATable 312.48",
+        "Zero-Rated 0.00",
+        "4 AMOUNT DUE 350.00"
+      ].join("\n"),
+      confidence: 0.64,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items.map((item) => item.name)).toEqual(["Burger"]);
+    expect(parsed.subtotal).toBe(350);
+    expect(parsed.total).toBe(350);
+  });
+
   it("returns an editable empty row when no items can be parsed", () => {
     const parsed = parseReceiptText({ text: "blur ??", confidence: 0.1, participantIds: ["maya"] });
 

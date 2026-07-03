@@ -10,6 +10,15 @@ const TAX_LABELS = ["vat", "tax"];
 const SERVICE_CHARGE_LABELS = ["service charge", "svc charge", "service fee"];
 const TOTAL_LABELS = ["total", "grand total"];
 const AMOUNT_DUE_LABELS = ["amount due", "total amount due", "balance due"];
+const NON_ASSIGNABLE_SUMMARY_LABELS = [
+  "price w/o",
+  "price without",
+  "net amount",
+  "vatable",
+  "vat able",
+  "zero-rated",
+  "zero rated"
+];
 const PAYMENT_LABELS = [
   "cash",
   "change",
@@ -85,12 +94,15 @@ const taxMatcher = buildAnchoredMatcher(TAX_LABELS);
 const serviceChargeMatcher = buildAnchoredMatcher(SERVICE_CHARGE_LABELS);
 const totalMatcher = buildAnchoredMatcher(TOTAL_LABELS);
 const amountDueMatcher = buildAnchoredMatcher(AMOUNT_DUE_LABELS);
+const nonAssignableSummaryMatcher = buildAnchoredMatcher(NON_ASSIGNABLE_SUMMARY_LABELS);
 const paymentMatcher = buildAnchoredMatcher(PAYMENT_LABELS);
 const metadataMatcher = buildAnchoredMatcher(METADATA_LABELS);
 
 function normalizeReceiptKeywordLine(line: string): string {
   return line
     .trim()
+    .replace(/^\d+\s*(?:[xX]\s*)?(?=(?:sub|total|amount|vat|price|net|zero))/i, "")
+    .replace(/^sub[\s-]*total\b/i, "subtotal")
     .replace(/^sub\s+[[\]t7o0il1]{2,}/i, "subtotal")
     .replace(/^sub\s*[t7][o0][t7]al\b/i, "subtotal")
     .replace(/^[t7r][o0]tal\b/i, "total")
@@ -183,7 +195,8 @@ function isSummaryLine(line: string): boolean {
     taxMatcher.test(normalizedLine) ||
     serviceChargeMatcher.test(normalizedLine) ||
     totalMatcher.test(normalizedLine) ||
-    amountDueMatcher.test(normalizedLine)
+    amountDueMatcher.test(normalizedLine) ||
+    nonAssignableSummaryMatcher.test(normalizedLine)
   );
 }
 

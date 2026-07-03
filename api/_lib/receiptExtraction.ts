@@ -227,6 +227,21 @@ function calculateConfidence(values: number[]): number {
   return roundConfidence(total / values.length);
 }
 
+function semanticRowKind(row: ParsedGeminiReceiptRow): GeminiReceiptRowKind {
+  const label = `${row.label} ${row.name ?? ""}`
+    .trim()
+    .replace(/^\d+\s*(?:[xX]\s*)?(?=(?:sub|total|amount|vat|service|price|net|zero))/i, "");
+
+  if (/\b(?:amount|balance)\s+due\b/i.test(label)) return "amount_due";
+  if (/^(?:sub[\s-]*total|total)\b/i.test(label)) return "subtotal";
+  if (/^(?:service\s+(?:charge|fee)|svc\s+charge)\b/i.test(label)) return "service_charge";
+  if (/^(?:vat|tax)\b/i.test(label)) return "vat";
+  if (/^(?:price\s+w\/o|price\s+without|net\s+amount|vatable|vat\s+able|zero[\s-]*rated)\b/i.test(label)) {
+    return "other";
+  }
+  return row.kind;
+}
+
 export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtraction {
   const parsed = parsePayload(payload);
   const warnings: string[] = [];
@@ -241,17 +256,7 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
   let positiveItemCount = 0;
 
   for (const row of parsed.rows) {
-    const summaryLabel = `${row.label} ${row.name ?? ""}`.trim();
-    const isTotalBoundary =
-      !/amount\s+due/i.test(summaryLabel) &&
-      /^(?:sub[\s-]*total|total)(?:\b|\s|:)/i.test(summaryLabel);
-    if (!seenSubtotal && isTotalBoundary) {
-      seenSubtotal = true;
-      confidenceValues.push(row.confidence);
-      continue;
-    }
-
-    switch (row.kind) {
+    switch (semanticRowKind(row)) {
       case "item": {
         if (seenSubtotal) {
           continue;
