@@ -1,5 +1,5 @@
 export interface PreparedReceiptImage {
-  name: "original" | "grayscale" | "high-contrast" | "receipt-crop";
+  name: "original" | "grayscale" | "high-contrast" | "receipt-crop" | "receipt-items";
   imageDataUrl: string;
 }
 
@@ -34,10 +34,11 @@ export interface ImageBrowser {
   createCanvas(width: number, height: number): BrowserCanvas;
 }
 
-const maxLongestEdge = 2400;
+const maxLongestEdge = 3200;
 const maxUpscaleFactor = 2;
 const highContrastThreshold = 160;
 const paperBrightnessThreshold = 120;
+const paperColorSpreadThreshold = 32;
 
 interface CropBounds {
   x: number;
@@ -110,6 +111,25 @@ export async function prepareReceiptImages(
           cropBounds
         )
       });
+      if (cropBounds.height > cropBounds.width * 1.25) {
+        const itemBounds = {
+          x: cropBounds.x,
+          y: Math.round(cropBounds.y + cropBounds.height * 0.34),
+          width: cropBounds.width,
+          height: Math.round(cropBounds.height * 0.3)
+        };
+        const itemDimensions = scaleDimensions(itemBounds.width, itemBounds.height);
+        variants.push({
+          name: "receipt-items",
+          imageDataUrl: createVariantImageDataUrl(
+            browser,
+            image,
+            itemDimensions,
+            grayscalePixel,
+            itemBounds
+          )
+        });
+      }
     }
     return variants;
   } catch {
@@ -205,7 +225,9 @@ function detectReceiptBounds(
         pixels[offset + 2],
         pixels[offset + 3]
       );
-      if (brightness >= paperBrightnessThreshold) {
+      const colorSpread = Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]) -
+        Math.min(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+      if (brightness >= paperBrightnessThreshold && colorSpread <= paperColorSpreadThreshold) {
         rowCounts[y] += 1;
         columnCounts[x] += 1;
       }

@@ -3,6 +3,31 @@ import { describe, expect, it } from "vitest";
 import { parseReceiptText, scoreParsedReceipt } from "./receiptTextParser";
 
 describe("receiptTextParser", () => {
+  it("pairs standalone amount-column lines with the following item description", () => {
+    const parsed = parseReceiptText({
+      text: [
+        "ATSU-YA FOOD INC.",
+        "Qty Item Description Amount",
+        "515.00",
+        "1 Rosu 180 WH",
+        "450.00",
+        "1 Rosu 120 WH",
+        "1425.00",
+        "3 Hire 120 WH",
+        "Sub-total: 2390.00",
+        "Amount Due (PHP) 2390.00"
+      ].join("\n"),
+      confidence: 0.4,
+      participantIds: ["maya", "nico"]
+    });
+
+    expect(parsed.items).toMatchObject([
+      { name: "Rosu 180 WH", price: 515 },
+      { name: "Rosu 120 WH", price: 450 },
+      { name: "Hire 120 WH", price: 1425 }
+    ]);
+  });
+
   it("parses item rows and Philippine peso totals", () => {
     const parsed = parseReceiptText({
       text: [

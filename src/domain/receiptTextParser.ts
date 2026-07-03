@@ -29,6 +29,13 @@ const METADATA_LABELS = [
   "order",
   "invoice",
   "check",
+  "min",
+  "serial",
+  "server",
+  "audit",
+  "transaction",
+  "tel",
+  "tin",
   "terminal",
   "queue",
   "orno",
@@ -54,6 +61,7 @@ export interface ParsedReceiptText {
   total: number;
   confidence: number;
   warnings: string[];
+  hasExplicitSummary?: boolean;
 }
 
 export interface ParsedMoneyToken {
@@ -162,6 +170,12 @@ function parseQuantity(name: string): { quantity: number; name: string } {
   };
 }
 
+function parseColumnQuantity(name: string): { quantity: number; name: string } {
+  const match = name.match(/^(?<quantity>\d+)\s+/);
+  if (!match?.groups?.quantity) return parseQuantity(name);
+  return { quantity: Number(match.groups.quantity), name: name.slice(match[0].length).trim() };
+}
+
 function isSummaryLine(line: string): boolean {
   const normalizedLine = normalizeReceiptKeywordLine(line);
   return (
@@ -249,11 +263,35 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
   let foundExplicitTotal = false;
   let pastGrandTotal = false;
   let summaryOnlyAfterSubtotal = false;
+  let insideItemTable = false;
+  let pendingStandalonePrice: ParsedMoneyToken | undefined;
+
+  function addItem(name: string, quantity: number, parsedMoney: ParsedMoneyToken): void {
+    const occurrence = (itemCounts.get(name) ?? 0) + 1;
+    itemCounts.set(name, occurrence);
+    const isAmbiguous = isAmbiguousPriceToken(name, parsedMoney);
+    items.push({
+      id: `${slugify(name)}-${occurrence}`,
+      name,
+      quantity,
+      price: parsedMoney.amount,
+      assignedParticipantIds: input.participantIds,
+      confidence: input.confidence,
+      parseSource: "ocr",
+      needsReview:
+        input.confidence < LOW_CONFIDENCE_THRESHOLD || parsedMoney.normalized || isAmbiguous
+    });
+  }
 
   for (const line of lines) {
     const parsedMoney = parseReceiptMoney(line);
     const normalizedLine = normalizeReceiptKeywordLine(line);
     if (pastGrandTotal) continue;
+
+    if (/\bitem\s+description\b/i.test(line)) {
+      insideItemTable = true;
+      continue;
+    }
 
     if (summaryOnlyAfterSubtotal) {
       if (parsedMoney && amountDueMatcher.test(normalizedLine)) {
@@ -293,6 +331,18 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
     }
 
     if (!parsedMoney) {
+      if (insideItemTable && pendingStandalonePrice && /[a-z]{3}/i.test(line) && !isReceiptExcludedLine(line)) {
+        const quantityAndName = parseColumnQuantity(line.replace(/^[^a-z0-9]+/i, ""));
+        if (quantityAndName.name) {
+          addItem(quantityAndName.name, quantityAndName.quantity, pendingStandalonePrice);
+          pendingStandalonePrice = undefined;
+        }
+      }
+      continue;
+    }
+
+    if (insideItemTable && !/^\d+\s+[a-z]/i.test(parsedMoney.prefix.trim())) {
+      pendingStandalonePrice = parsedMoney;
       continue;
     }
 
@@ -301,25 +351,16 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       continue;
     }
 
+    if ((quantityAndName.name.match(/[a-z]/gi) ?? []).length < 2) {
+      continue;
+    }
+
     if (isMetadataLine(quantityAndName.name)) {
       continue;
     }
 
-    const occurrence = (itemCounts.get(quantityAndName.name) ?? 0) + 1;
-    itemCounts.set(quantityAndName.name, occurrence);
-
-    const isAmbiguous = isAmbiguousPriceToken(quantityAndName.name, parsedMoney);
-    items.push({
-      id: `${slugify(quantityAndName.name)}-${occurrence}`,
-      name: quantityAndName.name,
-      quantity: quantityAndName.quantity,
-      price: parsedMoney.amount,
-      assignedParticipantIds: input.participantIds,
-      confidence: input.confidence,
-      parseSource: "ocr",
-      needsReview:
-        input.confidence < LOW_CONFIDENCE_THRESHOLD || parsedMoney.normalized || isAmbiguous
-    });
+    addItem(quantityAndName.name, quantityAndName.quantity, parsedMoney);
+    pendingStandalonePrice = undefined;
   }
 
   if (items.length === 0) {
@@ -332,7 +373,8 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       serviceCharge: 0,
       total: 0,
       confidence: input.confidence,
-      warnings
+      warnings,
+      hasExplicitSummary: false
     };
   }
 
@@ -353,7 +395,8 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
     serviceCharge,
     total,
     confidence: input.confidence,
-    warnings
+    warnings,
+    hasExplicitSummary: foundExplicitSubtotal || foundExplicitTotal
   };
 
   if (items.some((item) => item.needsReview)) {
@@ -381,7 +424,7 @@ export function scoreParsedReceipt(parsed: ParsedReceiptText): number {
   const itemScore = Math.min(0.25, positiveItems * 0.12);
   const merchantScore = parsed.merchantName !== FALLBACK_MERCHANT_NAME ? 0.08 : 0;
   const summaryScore = parsed.total > 0 ? 0.07 : 0;
-  const consistencyScore = totalsAreConsistent(parsed) ? 0.2 : 0;
+  const consistencyScore = parsed.hasExplicitSummary && totalsAreConsistent(parsed) ? 0.2 : 0;
 
   const rawScore =
     clamp(parsed.confidence, 0, 1) * 0.45 +

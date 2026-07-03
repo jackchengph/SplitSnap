@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReceiptScanner } from "./ReceiptScanner";
@@ -29,7 +29,9 @@ describe("ReceiptScanner", () => {
       new File(["receipt"], "receipt.png", { type: "image/png" })
     );
 
-    expect(onCapture).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png;base64,/));
+    await waitFor(() => {
+      expect(onCapture).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png;base64,/));
+    });
   });
 
   it("rejects non-image uploads before OCR", async () => {

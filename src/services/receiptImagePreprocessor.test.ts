@@ -228,16 +228,16 @@ describe("prepareReceiptImages", () => {
     expect(thresholdPixels.slice(8, 16)).toEqual([255, 255, 255, 255, 255, 255, 255, 255]);
   });
 
-  it("caps the longest edge at 2400 pixels while preserving aspect ratio", async () => {
+  it("caps the longest edge at 3200 pixels while preserving aspect ratio", async () => {
     const records: FakeCanvasRecord[] = [];
     const browser = createDimensionOnlyBrowser({ width: 3000, height: 1500 }, records);
 
     await prepareReceiptImages("data:image/png;base64,abc", browser);
 
-    expect(records[0].width).toBe(2400);
-    expect(records[0].height).toBe(1200);
-    expect(records[1].width).toBe(2400);
-    expect(records[1].height).toBe(1200);
+    expect(records[0].width).toBe(3200);
+    expect(records[0].height).toBe(1600);
+    expect(records[1].width).toBe(3200);
+    expect(records[1].height).toBe(1600);
   });
 
   it("adds a cropped receipt candidate when light paper is surrounded by a dark background", async () => {
@@ -263,7 +263,8 @@ describe("prepareReceiptImages", () => {
       "original",
       "grayscale",
       "high-contrast",
-      "receipt-crop"
+      "receipt-crop",
+      "receipt-items"
     ]);
   });
 });

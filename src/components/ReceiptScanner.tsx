@@ -1,22 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { ParseStatus } from "../domain/types";
+import { prepareReceiptFile } from "../services/receiptImageFile";
 
 interface ReceiptScannerProps {
   parseStatus: ParseStatus;
   parseWarnings: string[];
   onCapture: (imageDataUrl: string) => void | Promise<void>;
   onHome: () => void;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === "string"
-      ? resolve(reader.result)
-      : reject(new Error("Receipt image could not be read."));
-    reader.onerror = () => reject(reader.error ?? new Error("Receipt image could not be read."));
-    reader.readAsDataURL(file);
-  });
 }
 
 export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }: ReceiptScannerProps) {
@@ -76,16 +66,13 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
   }
 
   async function handleUpload(file: File) {
-    if (!file.type.startsWith("image/")) {
+    if (!file.type.startsWith("image/") && !/\.hei[cf]$/i.test(file.name)) {
       setUploadError("Choose a receipt image file.");
       return;
     }
-    if (file.size > 15 * 1024 * 1024) {
-      setUploadError("Receipt images must be 15 MB or smaller.");
-      return;
-    }
     try {
-      await submitImage(await readFileAsDataUrl(file));
+      const prepared = await prepareReceiptFile(file);
+      await submitImage(prepared.dataUrl);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Receipt image could not be read.");
     }
@@ -148,7 +135,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
           Upload receipt photo
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*,.heic,.heif"
             disabled={isProcessing}
             onChange={(event) => {
               const file = event.target.files?.[0];

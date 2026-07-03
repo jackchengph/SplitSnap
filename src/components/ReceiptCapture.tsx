@@ -1,25 +1,10 @@
 import { useState } from "react";
 import type { Receipt } from "../domain/types";
+import { prepareReceiptFile } from "../services/receiptImageFile";
 
 interface ReceiptCaptureProps {
   receipt: Receipt;
   onUpload: (imageDataUrl: string) => Promise<void> | void;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-
-      reject(new Error("Receipt image could not be read."));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Receipt image could not be read."));
-    reader.readAsDataURL(file);
-  });
 }
 
 export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
@@ -28,15 +13,15 @@ export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
     receipt.ocrConfidence < 0.85 || receipt.items.some((item) => item.needsReview);
 
   async function handleUpload(file: File): Promise<void> {
-    if (!file.type.startsWith("image/")) {
+    if (!file.type.startsWith("image/") && !/\.hei[cf]$/i.test(file.name)) {
       setUploadError("Choose an image file for receipt OCR.");
       return;
     }
 
     setUploadError("");
     try {
-      const imageDataUrl = await readFileAsDataUrl(file);
-      await onUpload(imageDataUrl);
+      const prepared = await prepareReceiptFile(file);
+      await onUpload(prepared.dataUrl);
     } catch (error) {
       setUploadError(
         error instanceof Error ? error.message : "Receipt image could not be uploaded."
@@ -67,7 +52,7 @@ export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
         Upload receipt image
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif"
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) {
