@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { demoGroup, demoReceipt, mockFriends } from "../domain/mockData";
 import { ItemAssignment } from "./ItemAssignment";
@@ -16,9 +16,30 @@ describe("ItemAssignment", () => {
         onToggleParticipant={vi.fn()}
         onUpdatePrice={vi.fn()}
         onUpdateName={vi.fn()}
+        onUpdateQuantity={vi.fn()}
       />
     );
 
     expect(screen.getByText("Gemini")).toBeInTheDocument();
+  });
+
+  it("lets the payer edit an item quantity", () => {
+    const onUpdateQuantity = vi.fn();
+    render(
+      <ItemAssignment
+        receipt={demoReceipt}
+        friends={mockFriends}
+        group={demoGroup}
+        onToggleParticipant={vi.fn()}
+        onUpdatePrice={vi.fn()}
+        onUpdateName={vi.fn()}
+        onUpdateQuantity={onUpdateQuantity}
+      />
+    );
+
+    const quantity = screen.getAllByLabelText("Quantity")[0];
+    fireEvent.change(quantity, { target: { value: "3" } });
+
+    expect(onUpdateQuantity).toHaveBeenLastCalledWith(demoReceipt.items[0].id, 3);
   });
 });

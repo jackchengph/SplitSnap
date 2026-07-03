@@ -8,6 +8,7 @@ interface ItemAssignmentProps {
   onToggleParticipant: (itemId: string, participantId: string) => void;
   onUpdatePrice: (itemId: string, price: number) => void;
   onUpdateName: (itemId: string, name: string) => void;
+  onUpdateQuantity: (itemId: string, quantity: number) => void;
 }
 
 export function ItemAssignment({
@@ -16,7 +17,8 @@ export function ItemAssignment({
   group,
   onToggleParticipant,
   onUpdatePrice,
-  onUpdateName
+  onUpdateName,
+  onUpdateQuantity
 }: ItemAssignmentProps) {
   const participants = friends.filter((friend) => group.participantIds.includes(friend.id));
 
@@ -39,9 +41,7 @@ export function ItemAssignment({
                     onChange={(event) => onUpdateName(item.id, event.target.value)}
                   />
                 </label>
-                <p>
-                  Qty {item.quantity} · confidence {Math.round(item.confidence * 100)}%
-                </p>
+                <p>Confidence {Math.round(item.confidence * 100)}%</p>
                 <div className="tag-row">
                   {item.parseSource ? (
                     <span className={item.needsReview ? "tag warning-tag" : "tag"}>
@@ -57,16 +57,28 @@ export function ItemAssignment({
                   {item.needsReview ? <span className="tag warning-tag">Check price/name</span> : null}
                 </div>
               </div>
-              <label className="price-input">
-                Price
-                <input
-                  type="number"
-                  value={item.price}
-                  min="0"
-                  step="0.01"
-                  onChange={(event) => onUpdatePrice(item.id, Number(event.target.value))}
-                />
-              </label>
+              <div className="item-number-fields">
+                <label className="price-input">
+                  Quantity
+                  <input
+                    type="number"
+                    value={item.quantity}
+                    min="1"
+                    step="1"
+                    onChange={(event) => onUpdateQuantity(item.id, Number(event.target.value))}
+                  />
+                </label>
+                <label className="price-input">
+                  Price
+                  <input
+                    type="number"
+                    value={item.price}
+                    min="0"
+                    step="0.01"
+                    onChange={(event) => onUpdatePrice(item.id, Number(event.target.value))}
+                  />
+                </label>
+              </div>
             </div>
             <div className="chip-row" aria-label={`${item.name} participants`}>
               {participants.map((friend) => {

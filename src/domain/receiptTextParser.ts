@@ -319,7 +319,14 @@ export function parseReceiptText(input: ReceiptTextInput): ParsedReceiptText {
       continue;
     }
 
-    if (parsedMoney && (totalMatcher.test(normalizedLine) || amountDueMatcher.test(normalizedLine))) {
+    if (parsedMoney && totalMatcher.test(normalizedLine)) {
+      subtotal = parsedMoney.amount;
+      foundExplicitSubtotal = true;
+      summaryOnlyAfterSubtotal = true;
+      continue;
+    }
+
+    if (parsedMoney && amountDueMatcher.test(normalizedLine)) {
       total = parsedMoney.amount;
       foundExplicitTotal = true;
       pastGrandTotal = true;

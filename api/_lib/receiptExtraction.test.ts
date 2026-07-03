@@ -54,6 +54,21 @@ describe("normalizeGeminiReceipt", () => {
     expect(result.total).toBe(570);
   });
 
+  it("treats a model-labeled TOTAL item as the subtotal boundary", () => {
+    const payload = basePayload();
+    payload.rows = [
+      payload.rows[0],
+      { kind: "item", label: "TOTAL 515.00", name: "TOTAL", quantity: 1, amount: 515, confidence: 0.99 },
+      { kind: "item", label: "Optional tip 50.00", name: "Optional tip", quantity: 1, amount: 50, confidence: 0.99 },
+      payload.rows[3]
+    ];
+
+    const result = normalizeGeminiReceipt(payload);
+
+    expect(result.items.map((item) => item.name)).toEqual(["Rosu 180 WH"]);
+    expect(result.total).toBe(570);
+  });
+
   it("normalizes malformed item quantities and marks the row for review", () => {
     const payload = basePayload();
     payload.rows[0] = { ...payload.rows[0], quantity: 1.8, confidence: 0.7 };

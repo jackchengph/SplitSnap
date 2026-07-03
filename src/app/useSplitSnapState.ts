@@ -361,6 +361,18 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }));
   }
 
+  function updateItemQuantity(itemId: string, quantity: number) {
+    const normalizedQuantity = Math.max(1, Math.round(quantity || 1));
+    setReceipt((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.id === itemId
+          ? { ...item, quantity: normalizedQuantity, parseSource: "manual", needsReview: false }
+          : item
+      )
+    }));
+  }
+
   function sendReminder(participantId: string) {
     const result = split.results.find((item) => item.participantId === participantId);
     if (!result || result.status === "paid") {
@@ -483,6 +495,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     toggleItemParticipant,
     updateItemPrice,
     updateItemName,
+    updateItemQuantity,
     sendReminder,
     markPaid,
     submitPaymentProof,

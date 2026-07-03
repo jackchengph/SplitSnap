@@ -241,6 +241,16 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
   let positiveItemCount = 0;
 
   for (const row of parsed.rows) {
+    const summaryLabel = `${row.label} ${row.name ?? ""}`.trim();
+    const isTotalBoundary =
+      !/amount\s+due/i.test(summaryLabel) &&
+      /^(?:sub[\s-]*total|total)(?:\b|\s|:)/i.test(summaryLabel);
+    if (!seenSubtotal && isTotalBoundary) {
+      seenSubtotal = true;
+      confidenceValues.push(row.confidence);
+      continue;
+    }
+
     switch (row.kind) {
       case "item": {
         if (seenSubtotal) {

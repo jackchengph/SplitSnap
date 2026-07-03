@@ -26,6 +26,7 @@ interface SplitReviewPageProps {
   onToggleParticipant: (itemId: string, participantId: string) => void;
   onUpdatePrice: (itemId: string, price: number) => void;
   onUpdateName: (itemId: string, name: string) => void;
+  onUpdateQuantity: (itemId: string, quantity: number) => void;
   onReminder: (participantId: string) => void;
   onMarkPaid: (participantId: string) => void;
 }
@@ -42,6 +43,7 @@ export function SplitReviewPage({
   onToggleParticipant,
   onUpdatePrice,
   onUpdateName,
+  onUpdateQuantity,
   onReminder,
   onMarkPaid
 }: SplitReviewPageProps) {
@@ -74,6 +76,7 @@ export function SplitReviewPage({
             onToggleParticipant={onToggleParticipant}
             onUpdatePrice={onUpdatePrice}
             onUpdateName={onUpdateName}
+            onUpdateQuantity={onUpdateQuantity}
           />
         </div>
         <aside className="summary-column">

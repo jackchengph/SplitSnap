@@ -125,6 +125,26 @@ describe("receiptTextParser", () => {
     expect(parsed.total).toBe(524);
   });
 
+  it("treats TOTAL as a subtotal cutoff and waits for AMOUNT DUE", () => {
+    const parsed = parseReceiptText({
+      text: [
+        "BGC DINER",
+        "Burger 350.00",
+        "Fries 100.00",
+        "TOTAL 450.00",
+        "VAT 54.00",
+        "Optional tip 99.00",
+        "AMOUNT DUE 504.00"
+      ].join("\n"),
+      confidence: 0.94,
+      participantIds: ["maya"]
+    });
+
+    expect(parsed.items.map((item) => item.name)).toEqual(["Burger", "Fries"]);
+    expect(parsed.subtotal).toBe(450);
+    expect(parsed.total).toBe(504);
+  });
+
   it("returns an editable empty row when no items can be parsed", () => {
     const parsed = parseReceiptText({ text: "blur ??", confidence: 0.1, participantIds: ["maya"] });
 

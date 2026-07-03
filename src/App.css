@@ -439,6 +439,16 @@ h2 {
   min-width: 112px;
 }
 
+.item-number-fields {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.item-number-fields .price-input:first-child input {
+  width: 76px;
+}
+
 .item-name-input {
   color: #667874;
   display: grid;

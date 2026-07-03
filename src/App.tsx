@@ -174,6 +174,7 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
         onToggleParticipant={state.toggleItemParticipant}
         onUpdatePrice={state.updateItemPrice}
         onUpdateName={state.updateItemName}
+        onUpdateQuantity={state.updateItemQuantity}
         onReminder={state.sendReminder}
         onMarkPaid={state.markPaid}
       />
