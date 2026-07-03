@@ -9,6 +9,14 @@ npm install
 npm run dev -- --port 5174
 ```
 
+The Vite-only command uses local OCR fallback because it does not run Vercel
+Functions. To test Gemini receipt scanning locally, use the linked Vercel
+runtime instead:
+
+```bash
+npm run dev:full
+```
+
 Without Firebase settings, SplitSnap enters a labeled local-only mode and stores the current workspace in the browser. This is useful for development, but it does not synchronize across devices.
 
 ## Test And Build
@@ -52,9 +60,13 @@ Server:
 
 ```text
 FIREBASE_SERVICE_ACCOUNT_JSON
+GEMINI_API_KEY
 ```
 
-Use one-line JSON for the service account value. Do not add `VITE_` to it.
+Use one-line JSON for the service account value. Neither server secret may use
+a `VITE_` prefix. Put `GEMINI_API_KEY` only in ignored `.env.local` and Vercel
+Project Settings. Rotate any development key that has been shared in chat
+before production or target-market testing.
 
 ## Vercel Deployment
 
@@ -62,7 +74,7 @@ Use one-line JSON for the service account value. Do not add `VITE_` to it.
 vercel
 ```
 
-Add the same environment variables in Vercel Project Settings. The static app is served by Vite; `/api/notifications/send` runs as a Vercel Function and verifies the caller's Firebase ID token before sending through Firebase Cloud Messaging.
+Add the same environment variables in Vercel Project Settings. The static app is served by Vite; `/api/notifications/send` runs as a Vercel Function and verifies the caller's Firebase ID token before sending through Firebase Cloud Messaging. `/api/receipts/parse` keeps the Gemini key server-side, validates the image and structured model response, and returns normalized receipt fields.
 
 Google sign-in requires the deployed Vercel domain to be listed under Firebase Authentication's authorized domains.
 
@@ -81,7 +93,7 @@ device.
 
 The repository contains real Google authentication, Firestore and Storage service boundaries, friend-code connection logic, PWA installation, push-token registration, and an authenticated push endpoint. Without a configured Firebase project, the current receipt screens run in local-only mode.
 
-Receipt OCR runs Tesseract in the browser and sends low-confidence rows through the existing fallback/manual-review pipeline. Screenshot payment validation is automated prototype validation, not bank-provider verification.
+Receipt scanning uses Gemini first when the Vercel Function and server key are available. Items stop at subtotal, VAT maps to tax, and Amount Due is the final total. Network, quota, configuration, or validation failures automatically use the browser Tesseract pipeline; uncertain rows remain editable. Screenshot payment validation is automated prototype validation, not bank-provider verification.
 
 ## Restaurant Image Credits
 

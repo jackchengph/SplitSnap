@@ -61,6 +61,11 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       response.status(429).json({ error: "Receipt scanning is busy. Trying local OCR is recommended." });
       return;
     }
+    if (process.env.NODE_ENV !== "test") {
+      console.error("Receipt extraction failed.", {
+        category: error instanceof Error ? error.name : "UnknownError"
+      });
+    }
     response.status(500).json({ error: "Receipt scanning could not be completed." });
   }
 }

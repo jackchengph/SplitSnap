@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:full": "set -a; [ ! -f .env.local ] || . ./.env.local; set +a; vercel dev --listen 5174",
     "build": "npm run typecheck && npm run typecheck:node && npm run typecheck:api && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest --exclude 'test/rules/**'",
