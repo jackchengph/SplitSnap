@@ -92,6 +92,7 @@ describe("normalizeGeminiReceipt", () => {
 
     expect(result.serviceCharge).toBe(50);
     expect(result.warnings).toContainEqual(expect.stringMatching(/do not reconcile/i));
+    expect(result.items.every((item) => item.needsReview)).toBe(true);
   });
 
   it.each([

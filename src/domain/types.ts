@@ -1,9 +1,11 @@
 export type PaymentStatus = "unpaid" | "reminded" | "paid";
-export type ReceiptParseSource = "ocr" | "yolo" | "manual";
+export type ReceiptParseSource = "gemini" | "ocr" | "yolo" | "manual";
 export type PayerStep = "home" | "friends" | "group" | "scanner" | "parsing" | "review";
 export type ParseStatus =
   | "Idle"
   | "Scanning receipt"
+  | "Reading receipt with Gemini"
+  | "Trying on-device OCR"
   | "OCR reading items"
   | "Analyzing receipt layout"
   | "Checking unclear areas"
@@ -61,6 +63,7 @@ export interface Receipt {
     | "sample"
     | "simulated-upload"
     | "camera-ocr"
+    | "gemini-primary"
     | "camera-ocr-yolo"
     | "restaurant-menu"
     | "manual";

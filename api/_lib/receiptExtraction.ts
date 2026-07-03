@@ -315,10 +315,11 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
   const reconciledTotal = roundMoney(
     items.reduce((sum, item) => sum + item.amount, 0) + tax + serviceCharge
   );
-  const normalizedItems = items;
+  let normalizedItems = items;
 
   if (Math.abs(reconciledTotal - total) > MONEY_TOLERANCE) {
     warnings.push(RECONCILIATION_WARNING);
+    normalizedItems = items.map((item) => ({ ...item, needsReview: true }));
   }
 
   if (normalizedItems.some((item) => item.needsReview)) {

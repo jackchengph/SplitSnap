@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PreparedReceiptImage } from "../services/receiptImagePreprocessor";
 import type { OcrRecognition } from "../services/receiptOcrEngine";
+import { GeminiGatewayError } from "../services/geminiReceiptGateway";
 import {
   parseCapturedReceipt,
   type ReceiptParsingDependencies
@@ -13,12 +14,88 @@ function createDependencies(
   recognize: (imageDataUrl: string) => Promise<OcrRecognition>
 ): ReceiptParsingDependencies {
   return {
+    requestGeminiReceipt: vi.fn().mockRejectedValue(new GeminiGatewayError()),
     prepareReceiptImages: vi.fn().mockResolvedValue(variants),
     recognizeReceiptImage: vi.fn(recognize)
   };
 }
 
 describe("receiptParsingService", () => {
+  it("uses Gemini first and skips local OCR after a valid extraction", async () => {
+    const dependencies = createDependencies([], async () => {
+      throw new Error("local OCR must not run");
+    });
+    vi.mocked(dependencies.requestGeminiReceipt).mockResolvedValue({
+      merchantName: "ATSU-YA FOOD INC.",
+      receiptDate: "2025-04-22",
+      currency: "PHP",
+      items: [
+        { name: "Rosu 180 WH", quantity: 1, amount: 515, confidence: 0.96, needsReview: false },
+        { name: "Hire 120 WH", quantity: 3, amount: 1425, confidence: 0.8, needsReview: true }
+      ],
+      tax: 478.91,
+      serviceCharge: 399.11,
+      total: 4869.11,
+      confidence: 0.9,
+      warnings: ["Receipt totals do not reconcile with parsed item rows."]
+    });
+
+    const result = await parseCapturedReceipt(
+      { imageDataUrl: receiptImage, participantIds: ["maya", "nico"] },
+      dependencies
+    );
+
+    expect(dependencies.prepareReceiptImages).not.toHaveBeenCalled();
+    expect(dependencies.recognizeReceiptImage).not.toHaveBeenCalled();
+    expect(result.receipt).toMatchObject({
+      merchantName: "ATSU-YA FOOD INC.",
+      date: "2025-04-22",
+      parserMode: "gemini-primary",
+      tax: 478.91,
+      serviceCharge: 399.11,
+      total: 4869.11,
+      parseStatus: "Needs manual review"
+    });
+    expect(result.receipt.items).toMatchObject([
+      {
+        name: "Rosu 180 WH",
+        price: 515,
+        assignedParticipantIds: ["maya", "nico"],
+        parseSource: "gemini"
+      },
+      { name: "Hire 120 WH", quantity: 3, price: 1425, needsReview: true }
+    ]);
+    expect(result.statuses).toEqual([
+      "Scanning receipt",
+      "Reading receipt with Gemini",
+      "Needs manual review"
+    ]);
+  });
+
+  it.each([429, 500, undefined])("falls back to local OCR once after Gemini status %s", async (status) => {
+    const dependencies = createDependencies(
+      [{ name: "original", imageDataUrl: "local-image" }],
+      async () => ({
+        text: "CAFE\nLatte 160.00\nAMOUNT DUE 160.00",
+        confidence: 0.91,
+        lines: [],
+        words: []
+      })
+    );
+    vi.mocked(dependencies.requestGeminiReceipt).mockRejectedValue(new GeminiGatewayError(status));
+
+    const result = await parseCapturedReceipt(
+      { imageDataUrl: receiptImage, participantIds: ["maya"] },
+      dependencies
+    );
+
+    expect(dependencies.requestGeminiReceipt).toHaveBeenCalledOnce();
+    expect(dependencies.prepareReceiptImages).toHaveBeenCalledOnce();
+    expect(dependencies.recognizeReceiptImage).toHaveBeenCalledOnce();
+    expect(result.receipt).toMatchObject({ parserMode: "camera-ocr", total: 160 });
+    expect(result.statuses).toContain("Trying on-device OCR");
+    expect(result.warnings).toContainEqual(expect.stringMatching(/Gemini.*local OCR/i));
+  });
   it("prefers a reconciled column layout over higher-confidence unstructured text", async () => {
     const words: OcrRecognition["words"] = [
       { text: "ITEM", confidence: 0.9, bbox: { x0: 10, y0: 20, x1: 60, y1: 40 }, lineIndex: 1 },
@@ -133,6 +210,8 @@ describe("receiptParsingService", () => {
     });
     expect(result.statuses).toEqual([
       "Scanning receipt",
+      "Reading receipt with Gemini",
+      "Trying on-device OCR",
       "OCR reading items",
       "Analyzing receipt layout",
       "Ready to split"
@@ -166,6 +245,7 @@ describe("receiptParsingService", () => {
 
   it("returns editable manual recovery when preprocessing itself fails", async () => {
     const dependencies: ReceiptParsingDependencies = {
+      requestGeminiReceipt: vi.fn().mockRejectedValue(new GeminiGatewayError()),
       prepareReceiptImages: vi.fn().mockRejectedValue(new Error("canvas exploded")),
       recognizeReceiptImage: vi.fn()
     };

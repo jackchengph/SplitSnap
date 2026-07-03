@@ -3,6 +3,8 @@ import {
   type PreparedReceiptImage
 } from "../services/receiptImagePreprocessor";
 import { recognizeReceiptImage } from "../services/receiptOcrEngine";
+import { requestGeminiReceipt } from "../services/geminiReceiptGateway";
+import type { NormalizedReceiptExtraction } from "./geminiReceiptTypes";
 import { parseReceiptLayout } from "./receiptLayoutParser";
 import {
   parseReceiptText,
@@ -14,9 +16,11 @@ import type { ParseStatus, Receipt } from "./types";
 export interface CaptureInput {
   imageDataUrl: string;
   participantIds: string[];
+  onStatus?: (status: ParseStatus) => void;
 }
 
 export interface ReceiptParsingDependencies {
+  requestGeminiReceipt: typeof requestGeminiReceipt;
   prepareReceiptImages: typeof prepareReceiptImages;
   recognizeReceiptImage: typeof recognizeReceiptImage;
 }
@@ -35,6 +39,7 @@ interface ParsedCandidate {
 const LAYOUT_STRUCTURE_BONUS = 0.04;
 
 const defaultDependencies: ReceiptParsingDependencies = {
+  requestGeminiReceipt,
   prepareReceiptImages,
   recognizeReceiptImage
 };
@@ -57,21 +62,26 @@ function selectStrongestCandidate(candidates: ParsedCandidate[]): ParsedCandidat
   }, undefined);
 }
 
-function buildResult(
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "receipt-item";
+}
+
+function reportStatus(input: CaptureInput, statuses: ParseStatus[], status: ParseStatus): void {
+  statuses.push(status);
+  input.onStatus?.(status);
+}
+
+function buildLocalResult(
   input: CaptureInput,
   parsed: ParsedReceiptText,
-  warnings: string[]
+  warnings: string[],
+  statuses: ParseStatus[]
 ): ParseReceiptResult {
   const needsManualReview = parsed.items.some((item) => item.needsReview);
   const finalStatus: ParseStatus = needsManualReview
     ? "Needs manual review"
     : "Ready to split";
-  const statuses: ParseStatus[] = [
-    "Scanning receipt",
-    "OCR reading items",
-    "Analyzing receipt layout",
-    finalStatus
-  ];
+  reportStatus(input, statuses, finalStatus);
   const combinedWarnings = [...warnings, ...parsed.warnings];
 
   return {
@@ -94,26 +104,69 @@ function buildResult(
   };
 }
 
-export async function parseCapturedReceipt(
+function buildGeminiResult(
   input: CaptureInput,
-  dependencies: ReceiptParsingDependencies = defaultDependencies
+  extraction: NormalizedReceiptExtraction,
+  statuses: ParseStatus[]
+): ParseReceiptResult {
+  const occurrences = new Map<string, number>();
+  const items = extraction.items.map((item) => {
+    const occurrence = (occurrences.get(item.name) ?? 0) + 1;
+    occurrences.set(item.name, occurrence);
+    return {
+      id: `${slugify(item.name)}-${occurrence}`,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.amount,
+      assignedParticipantIds: input.participantIds,
+      confidence: item.confidence,
+      parseSource: "gemini" as const,
+      needsReview: item.needsReview
+    };
+  });
+  const needsManualReview = items.some((item) => item.needsReview);
+  const finalStatus: ParseStatus = needsManualReview ? "Needs manual review" : "Ready to split";
+  reportStatus(input, statuses, finalStatus);
+
+  return {
+    receipt: {
+      id: `receipt-${Date.now()}`,
+      merchantName: extraction.merchantName,
+      date: extraction.receiptDate || new Date().toISOString().slice(0, 10),
+      imageUrl: input.imageDataUrl,
+      ocrConfidence: extraction.confidence,
+      parserMode: "gemini-primary",
+      parseStatus: finalStatus,
+      parseWarnings: extraction.warnings,
+      items,
+      tax: extraction.tax,
+      serviceCharge: extraction.serviceCharge,
+      total: extraction.total
+    },
+    statuses,
+    warnings: extraction.warnings
+  };
+}
+
+async function parseWithLocalOcr(
+  input: CaptureInput,
+  dependencies: ReceiptParsingDependencies,
+  statuses: ParseStatus[],
+  warnings: string[]
 ): Promise<ParseReceiptResult> {
+  reportStatus(input, statuses, "OCR reading items");
   const capturedImageUrl = cameraCapture(input.imageDataUrl);
-  const warnings: string[] = [];
   let images: PreparedReceiptImage[];
 
   try {
     images = await dependencies.prepareReceiptImages(capturedImageUrl);
   } catch (error) {
     warnings.push(`Receipt preprocessing failed: ${describeError(error)}`);
-    const parsed = parseReceiptText({
-      text: "",
-      confidence: 0,
-      participantIds: input.participantIds
-    });
-    return buildResult(input, parsed, warnings);
+    const parsed = parseReceiptText({ text: "", confidence: 0, participantIds: input.participantIds });
+    return buildLocalResult(input, parsed, warnings, statuses);
   }
 
+  reportStatus(input, statuses, "Analyzing receipt layout");
   const candidates: ParsedCandidate[] = [];
   for (const image of images) {
     try {
@@ -124,10 +177,7 @@ export async function parseCapturedReceipt(
         participantIds: input.participantIds
       });
       candidates.push({ parsed, score: scoreParsedReceipt(parsed) });
-      const layoutParsed = parseReceiptLayout({
-        recognition,
-        participantIds: input.participantIds
-      });
+      const layoutParsed = parseReceiptLayout({ recognition, participantIds: input.participantIds });
       if (layoutParsed) {
         candidates.push({
           parsed: layoutParsed,
@@ -139,14 +189,28 @@ export async function parseCapturedReceipt(
     }
   }
 
-  const strongest = selectStrongestCandidate(candidates);
-  const parsed =
-    strongest?.parsed ??
-    parseReceiptText({
-      text: "",
-      confidence: 0,
-      participantIds: input.participantIds
-    });
+  const parsed = selectStrongestCandidate(candidates)?.parsed ?? parseReceiptText({
+    text: "",
+    confidence: 0,
+    participantIds: input.participantIds
+  });
+  return buildLocalResult(input, parsed, warnings, statuses);
+}
 
-  return buildResult(input, parsed, warnings);
+export async function parseCapturedReceipt(
+  input: CaptureInput,
+  dependencies: ReceiptParsingDependencies = defaultDependencies
+): Promise<ParseReceiptResult> {
+  const statuses: ParseStatus[] = [];
+  reportStatus(input, statuses, "Scanning receipt");
+  reportStatus(input, statuses, "Reading receipt with Gemini");
+
+  try {
+    const extraction = await dependencies.requestGeminiReceipt(input.imageDataUrl);
+    return buildGeminiResult(input, extraction, statuses);
+  } catch {
+    const warnings = ["Gemini receipt scanning was unavailable, so SplitSnap used local OCR."];
+    reportStatus(input, statuses, "Trying on-device OCR");
+    return parseWithLocalOcr(input, dependencies, statuses, warnings);
+  }
 }
