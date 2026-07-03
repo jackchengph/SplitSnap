@@ -124,6 +124,58 @@ describe("useSplitSnapState", () => {
     expect(result.current.parseStatus).toBe("Ready to split");
     expect(result.current.receipt.items).toMatchObject([{ name: "Latte", price: 160 }]);
     expect(result.current.notifications.length).toBeGreaterThan(0);
+    expect(parseReceipt).toHaveBeenCalledWith(expect.objectContaining({
+      onStatus: expect.any(Function)
+    }));
+  });
+
+  it("tracks Gemini and local OCR progress reported by the parser", async () => {
+    let finishParsing: (() => void) | undefined;
+    const parseReceipt = vi.fn().mockImplementation(async (input) => {
+      input.onStatus?.("Reading receipt with Gemini");
+      input.onStatus?.("Trying on-device OCR");
+      input.onStatus?.("OCR reading items");
+      await new Promise<void>((resolve) => { finishParsing = resolve; });
+      return {
+        receipt: {
+          id: "receipt-review",
+          merchantName: "Scanned receipt",
+          date: "2026-07-03",
+          imageUrl: "data:image/png;base64,scan",
+          ocrConfidence: 0,
+          parserMode: "camera-ocr",
+          parseStatus: "Needs manual review",
+          parseWarnings: [],
+          items: [{
+            id: "unrecognized-item-1",
+            name: "Unrecognized item",
+            quantity: 1,
+            price: 0,
+            assignedParticipantIds: ["maya", "nico", "bea"],
+            confidence: 0,
+            parseSource: "ocr",
+            needsReview: true
+          }],
+          tax: 0,
+          serviceCharge: 0,
+          total: 0
+        },
+        statuses: [],
+        warnings: []
+      } satisfies ParseReceiptResult;
+    });
+    const { result } = renderHook(() => useSplitSnapState({ parseReceipt }));
+
+    let capture: Promise<void> | undefined;
+    act(() => { capture = result.current.captureReceipt("data:image/png;base64,scan"); });
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.parseStatus).toBe("OCR reading items");
+
+    await act(async () => {
+      finishParsing?.();
+      await capture;
+    });
+    expect(result.current.payerStep).toBe("review");
   });
 
   it("keeps a failed capture editable without creating zero-value expense notifications", async () => {
@@ -188,7 +240,7 @@ describe("useSplitSnapState", () => {
     });
 
     expect(result.current.payerStep).toBe("parsing");
-    expect(result.current.parseStatus).toBe("OCR reading items");
+    expect(result.current.parseStatus).toBe("Reading receipt with Gemini");
     expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,rejected-scan");
 
     await act(async () => {
@@ -248,7 +300,8 @@ describe("useSplitSnapState", () => {
 
     expect(parseReceipt).toHaveBeenCalledWith({
       imageDataUrl: uploadedImage,
-      participantIds: ["maya", "nico", "bea"]
+      participantIds: ["maya", "nico", "bea"],
+      onStatus: expect.any(Function)
     });
     expect(result.current.capturedReceiptImageUrl).toBe(uploadedImage);
     expect(result.current.receipt.imageUrl).toBe(uploadedImage);

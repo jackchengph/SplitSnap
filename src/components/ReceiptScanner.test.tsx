@@ -11,6 +11,23 @@ describe("ReceiptScanner", () => {
     });
   });
 
+  it.each(["Reading receipt with Gemini", "Trying on-device OCR"] as const)(
+    "shows %s as the active processing stage",
+    async (parseStatus) => {
+      render(
+        <ReceiptScanner
+          parseStatus={parseStatus}
+          parseWarnings={[]}
+          onCapture={vi.fn()}
+          onHome={vi.fn()}
+        />
+      );
+      await screen.findByText(/Camera permission was denied/i);
+      const stage = screen.getByText(parseStatus);
+      expect(stage).toHaveClass("active");
+    }
+  );
+
   it("passes an uploaded receipt image to the OCR capture path", async () => {
     const onCapture = vi.fn();
     const user = userEvent.setup();

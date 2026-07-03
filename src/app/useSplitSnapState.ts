@@ -275,11 +275,15 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     setCapturedReceiptImageUrl(imageDataUrl);
 
     const participantIds = activeGroup.participantIds;
-    setParseStatus("OCR reading items");
+    setParseStatus("Reading receipt with Gemini");
 
     try {
       const parseReceipt = options.parseReceipt ?? parseCapturedReceipt;
-      const parsed = await parseReceipt({ imageDataUrl, participantIds });
+      const parsed = await parseReceipt({
+        imageDataUrl,
+        participantIds,
+        onStatus: setParseStatus
+      });
       const hasPositivePriceItem = parsed.receipt.items.some((item) => item.price > 0);
 
       setReceipt(parsed.receipt);

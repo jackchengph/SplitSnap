@@ -145,7 +145,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
         </label>
         {uploadError ? <div className="notice warning" role="alert">{uploadError}</div> : null}
         <div className="parse-steps" aria-label="Receipt parse status">
-          {["Scanning receipt", "OCR reading items", "Analyzing receipt layout", "Needs manual review", "Ready to split"].map(
+          {["Scanning receipt", "Reading receipt with Gemini", "Trying on-device OCR", "OCR reading items", "Analyzing receipt layout", "Needs manual review", "Ready to split"].map(
             (status) => (
               <span className={parseStatus === status ? "tag active" : "tag"} key={status}>
                 {status}
