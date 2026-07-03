@@ -65,6 +65,23 @@ describe("calculateSplit", () => {
     ).toBeCloseTo(340, 2);
   });
 
+  it("does not add VAT twice when it is included in item prices", () => {
+    const vatInclusiveReceipt: Receipt = {
+      ...receipt,
+      taxIncluded: true,
+      tax: 30,
+      serviceCharge: 10,
+      total: 310
+    };
+
+    const summary = calculateSplit(vatInclusiveReceipt, group);
+
+    expect(summary.calculatedTotal).toBe(310);
+    expect(summary.results.reduce((total, result) => total + result.totalOwed, 0)).toBeCloseTo(310, 2);
+    expect(summary.results.every((result) => result.taxShare === 0)).toBe(true);
+    expect(summary.warnings).not.toContainEqual(expect.objectContaining({ type: "total-mismatch" }));
+  });
+
   it("does not show the payer owing themselves", () => {
     const summary = calculateSplit(receipt, group);
     expect(summary.results.some((result) => result.participantId === "payer")).toBe(false);

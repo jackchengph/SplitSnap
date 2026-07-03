@@ -63,18 +63,18 @@ describe("normalizeGeminiReceipt", () => {
     expect(result.items[0]).toMatchObject({ quantity: 2, needsReview: true });
   });
 
-  it("rejects duplicate VAT summary rows", () => {
+  it("keeps the first duplicate summary value and ignores non-item quantities", () => {
     const payload = basePayload();
-    payload.rows.push({
-      kind: "vat",
-      label: "duplicate VAT",
-      name: null,
-      quantity: null,
-      amount: 999,
-      confidence: 1
-    });
+    payload.rows.push(
+      { kind: "other", label: "10 Item(s) Total Amount", name: "Total Amount", quantity: 10, amount: 570, confidence: 1 },
+      { kind: "vat", label: "duplicate VAT", name: "VAT", quantity: null, amount: 999, confidence: 1 },
+      { kind: "service_charge", label: "Service Charge", name: "Service Charge", quantity: null, amount: 25, confidence: 1 },
+      { kind: "service_charge", label: "duplicate service", name: "Service Charge", quantity: null, amount: 99, confidence: 1 }
+    );
 
-    expect(() => normalizeGeminiReceipt(payload)).toThrow(InvalidGeminiReceiptError);
+    const result = normalizeGeminiReceipt(payload);
+    expect(result.tax).toBe(55);
+    expect(result.serviceCharge).toBe(25);
   });
 
   it("maps service charge separately and warns when printed totals do not reconcile", () => {
@@ -93,6 +93,21 @@ describe("normalizeGeminiReceipt", () => {
     expect(result.serviceCharge).toBe(50);
     expect(result.warnings).toContainEqual(expect.stringMatching(/do not reconcile/i));
     expect(result.items.every((item) => item.needsReview)).toBe(true);
+  });
+
+  it("accepts VAT-inclusive item prices when service charge alone reaches Amount Due", () => {
+    const payload = basePayload();
+    payload.rows = [
+      { kind: "item", label: "Dinner items", name: "Dinner items", quantity: 1, amount: 4470, confidence: 0.99 },
+      { kind: "subtotal", label: "Sub-total", name: null, quantity: null, amount: 4470, confidence: 0.99 },
+      { kind: "service_charge", label: "Service Charge", name: null, quantity: null, amount: 399.11, confidence: 0.99 },
+      { kind: "vat", label: "12% VAT", name: null, quantity: null, amount: 478.91, confidence: 0.99 },
+      { kind: "amount_due", label: "Amount Due", name: null, quantity: null, amount: 4869.11, confidence: 0.99 }
+    ];
+
+    const result = normalizeGeminiReceipt(payload);
+    expect(result.warnings).not.toContainEqual(expect.stringMatching(/do not reconcile/i));
+    expect(result.items[0].needsReview).toBe(false);
   });
 
   it.each([

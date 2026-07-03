@@ -137,7 +137,10 @@ function asQuantity(
   }
 
   if (rowKind !== "item") {
-    throw new InvalidGeminiReceiptError(`${fieldName} must be null for summary rows.`);
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new InvalidGeminiReceiptError(`${fieldName} must be a finite number or null.`);
+    }
+    return { quantity: null, normalized: true };
   }
 
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -266,26 +269,20 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
         break;
       }
       case "subtotal":
-        if (seenSubtotal) {
-          throw new InvalidGeminiReceiptError("Duplicate subtotal row.");
-        }
+        if (seenSubtotal) continue;
 
         seenSubtotal = true;
         confidenceValues.push(row.confidence);
         break;
       case "vat":
-        if (seenVat) {
-          throw new InvalidGeminiReceiptError("Duplicate VAT row.");
-        }
+        if (seenVat) continue;
 
         tax = row.amount;
         seenVat = true;
         confidenceValues.push(row.confidence);
         break;
       case "service_charge":
-        if (seenServiceCharge) {
-          throw new InvalidGeminiReceiptError("Duplicate service charge row.");
-        }
+        if (seenServiceCharge) continue;
 
         serviceCharge = row.amount;
         seenServiceCharge = true;
@@ -312,12 +309,18 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
     throw new UnusableGeminiReceiptError("Gemini receipt did not contain a valid Amount Due row.");
   }
 
-  const reconciledTotal = roundMoney(
+  const exclusiveTaxTotal = roundMoney(
     items.reduce((sum, item) => sum + item.amount, 0) + tax + serviceCharge
+  );
+  const inclusiveTaxTotal = roundMoney(
+    items.reduce((sum, item) => sum + item.amount, 0) + serviceCharge
   );
   let normalizedItems = items;
 
-  if (Math.abs(reconciledTotal - total) > MONEY_TOLERANCE) {
+  if (
+    Math.abs(exclusiveTaxTotal - total) > MONEY_TOLERANCE &&
+    Math.abs(inclusiveTaxTotal - total) > MONEY_TOLERANCE
+  ) {
     warnings.push(RECONCILIATION_WARNING);
     normalizedItems = items.map((item) => ({ ...item, needsReview: true }));
   }

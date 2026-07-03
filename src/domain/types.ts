@@ -71,6 +71,7 @@ export interface Receipt {
   parseWarnings?: string[];
   items: ReceiptItem[];
   tax: number;
+  taxIncluded?: boolean;
   serviceCharge: number;
   total: number;
 }

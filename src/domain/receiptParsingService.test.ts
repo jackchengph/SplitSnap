@@ -31,7 +31,8 @@ describe("receiptParsingService", () => {
       currency: "PHP",
       items: [
         { name: "Rosu 180 WH", quantity: 1, amount: 515, confidence: 0.96, needsReview: false },
-        { name: "Hire 120 WH", quantity: 3, amount: 1425, confidence: 0.8, needsReview: true }
+        { name: "Hire 120 WH", quantity: 3, amount: 1425, confidence: 0.8, needsReview: true },
+        { name: "Other items", quantity: 1, amount: 2530, confidence: 0.96, needsReview: false }
       ],
       tax: 478.91,
       serviceCharge: 399.11,
@@ -54,6 +55,7 @@ describe("receiptParsingService", () => {
       tax: 478.91,
       serviceCharge: 399.11,
       total: 4869.11,
+      taxIncluded: true,
       parseStatus: "Needs manual review"
     });
     expect(result.receipt.items).toMatchObject([
@@ -63,7 +65,8 @@ describe("receiptParsingService", () => {
         assignedParticipantIds: ["maya", "nico"],
         parseSource: "gemini"
       },
-      { name: "Hire 120 WH", quantity: 3, price: 1425, needsReview: true }
+      { name: "Hire 120 WH", quantity: 3, price: 1425, needsReview: true },
+      { name: "Other items", price: 2530, needsReview: false }
     ]);
     expect(result.statuses).toEqual([
       "Scanning receipt",

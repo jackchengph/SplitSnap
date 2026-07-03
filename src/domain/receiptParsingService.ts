@@ -125,6 +125,10 @@ function buildGeminiResult(
     };
   });
   const needsManualReview = items.some((item) => item.needsReview);
+  const itemTotal = items.reduce((total, item) => total + item.price, 0);
+  const taxIncluded =
+    extraction.tax > 0 &&
+    Math.abs(itemTotal + extraction.serviceCharge - extraction.total) <= 0.05;
   const finalStatus: ParseStatus = needsManualReview ? "Needs manual review" : "Ready to split";
   reportStatus(input, statuses, finalStatus);
 
@@ -140,6 +144,7 @@ function buildGeminiResult(
       parseWarnings: extraction.warnings,
       items,
       tax: extraction.tax,
+      taxIncluded,
       serviceCharge: extraction.serviceCharge,
       total: extraction.total
     },

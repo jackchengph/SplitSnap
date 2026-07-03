@@ -73,7 +73,8 @@ export function calculateSplit(
   }
 
   const receiptSubtotal = sum(receipt.items.map((item) => item.price));
-  const calculatedTotal = roundMoney(receiptSubtotal + receipt.tax + receipt.serviceCharge);
+  const additiveTax = receipt.taxIncluded ? 0 : receipt.tax;
+  const calculatedTotal = roundMoney(receiptSubtotal + additiveTax + receipt.serviceCharge);
 
   if (Math.abs(calculatedTotal - receipt.total) > 0.01) {
     warnings.push({
@@ -97,9 +98,9 @@ export function calculateSplit(
           share: roundMoney(itemShare.share)
         })),
         subtotal: roundMoney(subtotal),
-        taxShare: roundMoney(receipt.tax * proportion),
+        taxShare: roundMoney(additiveTax * proportion),
         serviceShare: roundMoney(receipt.serviceCharge * proportion),
-        totalOwed: roundMoney(subtotal + receipt.tax * proportion + receipt.serviceCharge * proportion),
+        totalOwed: roundMoney(subtotal + additiveTax * proportion + receipt.serviceCharge * proportion),
         status: statuses[participantId] ?? "unpaid"
       };
     })
@@ -108,7 +109,7 @@ export function calculateSplit(
   const displayedTotal = roundMoney(sum(results.map((result) => result.totalOwed)));
   const targetNonPayerTotal = roundMoney(
     nonPayerAssignedSubtotal +
-      receipt.tax * (assignedSubtotal === 0 ? 0 : nonPayerAssignedSubtotal / assignedSubtotal) +
+      additiveTax * (assignedSubtotal === 0 ? 0 : nonPayerAssignedSubtotal / assignedSubtotal) +
       receipt.serviceCharge * (assignedSubtotal === 0 ? 0 : nonPayerAssignedSubtotal / assignedSubtotal)
   );
   const remainder = roundMoney(targetNonPayerTotal - displayedTotal);

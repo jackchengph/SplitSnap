@@ -49,7 +49,9 @@ export function ItemAssignment({
                         ? "Layout recovery"
                         : item.parseSource === "manual"
                           ? "Manual review"
-                          : "OCR"}
+                          : item.parseSource === "gemini"
+                            ? "Gemini"
+                            : "OCR"}
                     </span>
                   ) : null}
                   {item.needsReview ? <span className="tag warning-tag">Check price/name</span> : null}
