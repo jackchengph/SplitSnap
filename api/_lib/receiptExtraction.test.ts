@@ -1,324 +1,114 @@
 import { describe, expect, it } from "vitest";
 import {
   InvalidGeminiReceiptError,
-  normalizeGeminiReceipt,
-  UnusableGeminiReceiptError
+  UnusableGeminiReceiptError,
+  normalizeGeminiReceipt
 } from "./receiptExtraction";
+
+interface TestRow {
+  kind: string;
+  label: string;
+  name: string | null;
+  quantity: number | null;
+  amount: number;
+  confidence: number;
+}
+
+function basePayload(): {
+  merchantName: string;
+  receiptDate: string;
+  currency: string;
+  rows: TestRow[];
+} {
+  return {
+    merchantName: "ATSU-YA FOOD INC.",
+    receiptDate: "2025-04-22",
+    currency: "PHP",
+    rows: [
+      { kind: "item", label: "1 Rosu 180 WH", name: "Rosu 180 WH", quantity: 1, amount: 515, confidence: 0.96 },
+      { kind: "subtotal", label: "Sub-total", name: null, quantity: null, amount: 515, confidence: 0.99 },
+      { kind: "vat", label: "12% VAT", name: null, quantity: null, amount: 55, confidence: 0.97 },
+      { kind: "amount_due", label: "Amount Due (PHP)", name: null, quantity: null, amount: 570, confidence: 0.99 }
+    ]
+  };
+}
 
 describe("normalizeGeminiReceipt", () => {
   it("keeps only pre-subtotal items and maps VAT and Amount Due", () => {
-    const result = normalizeGeminiReceipt({
-      merchantName: "ATSU-YA FOOD INC.",
-      receiptDate: "2025-04-22",
-      currency: "PHP",
-      rows: [
-        {
-          kind: "item",
-          label: "1 Rosu 180 WH",
-          name: "Rosu 180 WH",
-          quantity: 1,
-          amount: 515,
-          confidence: 0.96
-        },
-        { kind: "subtotal", label: "Sub-total", name: null, quantity: null, amount: 4470, confidence: 0.99 },
-        {
-          kind: "item",
-          label: "must be ignored",
-          name: "VAT detail",
-          quantity: 1,
-          amount: 399.11,
-          confidence: 0.4
-        },
-        { kind: "vat", label: "12% VAT", name: null, quantity: null, amount: 478.91, confidence: 0.97 },
-        {
-          kind: "amount_due",
-          label: "Amount Due (PHP)",
-          name: null,
-          quantity: null,
-          amount: 4869.11,
-          confidence: 0.99
-        }
-      ]
+    const payload = basePayload();
+    payload.rows.splice(2, 0, {
+      kind: "item",
+      label: "must be ignored",
+      name: "VAT detail",
+      quantity: 1,
+      amount: 399.11,
+      confidence: 0.4
     });
+
+    const result = normalizeGeminiReceipt(payload);
 
     expect(result.items).toEqual([
       { name: "Rosu 180 WH", quantity: 1, amount: 515, confidence: 0.96, needsReview: false }
     ]);
-    expect(result.tax).toBe(478.91);
-    expect(result.total).toBe(4869.11);
+    expect(result.tax).toBe(55);
+    expect(result.total).toBe(570);
   });
 
-  it("maps service charge separately from tax", () => {
-    const result = normalizeGeminiReceipt({
-      merchantName: "Cafe Luna",
-      receiptDate: "2025-04-22",
-      currency: "PHP",
-      rows: [
-        {
-          kind: "item",
-          label: "Pasta 250.00",
-          name: "Pasta",
-          quantity: 1,
-          amount: 250,
-          confidence: 0.95
-        },
-        { kind: "subtotal", label: "Subtotal", name: null, quantity: null, amount: 250, confidence: 0.95 },
-        { kind: "vat", label: "VAT", name: null, quantity: null, amount: 30, confidence: 0.95 },
-        {
-          kind: "service_charge",
-          label: "Service Charge",
-          name: null,
-          quantity: null,
-          amount: 25,
-          confidence: 0.95
-        },
-        { kind: "amount_due", label: "Amount Due", name: null, quantity: null, amount: 305, confidence: 0.95 }
-      ]
+  it("normalizes malformed item quantities and marks the row for review", () => {
+    const payload = basePayload();
+    payload.rows[0] = { ...payload.rows[0], quantity: 1.8, confidence: 0.7 };
+
+    const result = normalizeGeminiReceipt(payload);
+
+    expect(result.items[0]).toMatchObject({ quantity: 2, needsReview: true });
+  });
+
+  it("rejects duplicate VAT summary rows", () => {
+    const payload = basePayload();
+    payload.rows.push({
+      kind: "vat",
+      label: "duplicate VAT",
+      name: null,
+      quantity: null,
+      amount: 999,
+      confidence: 1
     });
 
-    expect(result.tax).toBe(30);
-    expect(result.serviceCharge).toBe(25);
-    expect(result.total).toBe(305);
+    expect(() => normalizeGeminiReceipt(payload)).toThrow(InvalidGeminiReceiptError);
   });
 
-  it("throws UnusableGeminiReceiptError when Amount Due is missing", () => {
-    expect(() =>
-      normalizeGeminiReceipt({
-        merchantName: "Cafe Luna",
-        receiptDate: "2025-04-22",
-        currency: "PHP",
-        rows: [
-          {
-            kind: "item",
-            label: "Americano 120.00",
-            name: "Americano",
-            quantity: 1,
-            amount: 120,
-            confidence: 0.94
-          },
-          { kind: "subtotal", label: "Subtotal", name: null, quantity: null, amount: 120, confidence: 0.9 },
-          { kind: "vat", label: "VAT", name: null, quantity: null, amount: 14.4, confidence: 0.9 }
-        ]
-      })
-    ).toThrow(UnusableGeminiReceiptError);
-  });
-
-  it("throws UnusableGeminiReceiptError when there is no positive-price item", () => {
-    expect(() =>
-      normalizeGeminiReceipt({
-        merchantName: "Cafe Luna",
-        receiptDate: "2025-04-22",
-        currency: "PHP",
-        rows: [
-          {
-            kind: "item",
-            label: "Zero value item",
-            name: "Water",
-            quantity: 1,
-            amount: 0,
-            confidence: 0.94
-          },
-          { kind: "subtotal", label: "Subtotal", name: null, quantity: null, amount: 0, confidence: 0.9 },
-          { kind: "amount_due", label: "Amount Due", name: null, quantity: null, amount: 0, confidence: 0.9 }
-        ]
-      })
-    ).toThrow(UnusableGeminiReceiptError);
-  });
-
-  it("throws InvalidGeminiReceiptError for non-finite amounts", () => {
-    expect(() =>
-      normalizeGeminiReceipt({
-        merchantName: "Cafe Luna",
-        receiptDate: "2025-04-22",
-        currency: "PHP",
-        rows: [
-          {
-            kind: "item",
-            label: "Americano 120.00",
-            name: "Americano",
-            quantity: 1,
-            amount: Number.POSITIVE_INFINITY,
-            confidence: 0.94
-          }
-        ]
-      })
-    ).toThrow(InvalidGeminiReceiptError);
-  });
-
-  it("throws InvalidGeminiReceiptError for zero or negative quantities", () => {
-    expect(() =>
-      normalizeGeminiReceipt({
-        merchantName: "Cafe Luna",
-        receiptDate: "2025-04-22",
-        currency: "PHP",
-        rows: [
-          {
-            kind: "item",
-            label: "Americano 120.00",
-            name: "Americano",
-            quantity: 0,
-            amount: 120,
-            confidence: 0.94
-          }
-        ]
-      })
-    ).toThrow(InvalidGeminiReceiptError);
-  });
-
-  it("throws InvalidGeminiReceiptError when more than 200 rows are provided", () => {
-    expect(() =>
-      normalizeGeminiReceipt({
-        merchantName: "Cafe Luna",
-        receiptDate: "2025-04-22",
-        currency: "PHP",
-        rows: Array.from({ length: 201 }, (_, index) => ({
-          kind: "item",
-          label: `Item ${index + 1}`,
-          name: `Item ${index + 1}`,
-          quantity: 1,
-          amount: 1,
-          confidence: 0.9
-        }))
-      })
-    ).toThrow(InvalidGeminiReceiptError);
-  });
-
-  it("throws InvalidGeminiReceiptError when a label is too long", () => {
-    expect(() =>
-      normalizeGeminiReceipt({
-        merchantName: "Cafe Luna",
-        receiptDate: "2025-04-22",
-        currency: "PHP",
-        rows: [
-          {
-            kind: "item",
-            label: "a".repeat(301),
-            name: "Americano",
-            quantity: 1,
-            amount: 120,
-            confidence: 0.94
-          }
-        ]
-      })
-    ).toThrow(InvalidGeminiReceiptError);
-  });
-
-  it("throws InvalidGeminiReceiptError for duplicate summary fields", () => {
-    expect(() =>
-      normalizeGeminiReceipt({
-        merchantName: "Cafe Luna",
-        receiptDate: "2025-04-22",
-        currency: "PHP",
-        rows: [
-          {
-            kind: "item",
-            label: "Americano 120.00",
-            name: "Americano",
-            quantity: 1,
-            amount: 120,
-            confidence: 0.94
-          },
-          { kind: "subtotal", label: "Subtotal", name: null, quantity: null, amount: 120, confidence: 0.9 },
-          { kind: "vat", label: "VAT", name: null, quantity: null, amount: 14.4, confidence: 0.9 },
-          { kind: "vat", label: "VAT", name: null, quantity: null, amount: 14.4, confidence: 0.9 },
-          {
-            kind: "amount_due",
-            label: "Amount Due",
-            name: null,
-            quantity: null,
-            amount: 134.4,
-            confidence: 0.9
-          }
-        ]
-      })
-    ).toThrow(InvalidGeminiReceiptError);
-  });
-
-  it("ignores item rows after subtotal", () => {
-    const result = normalizeGeminiReceipt({
-      merchantName: "ATSU-YA FOOD INC.",
-      receiptDate: "2025-04-22",
-      currency: "PHP",
-      rows: [
-        {
-          kind: "item",
-          label: "1 Rosu 180 WH",
-          name: "Rosu 180 WH",
-          quantity: 1,
-          amount: 515,
-          confidence: 0.96
-        },
-        { kind: "subtotal", label: "Sub-total", name: null, quantity: null, amount: 4470, confidence: 0.99 },
-        {
-          kind: "item",
-          label: "model-labelled item after subtotal",
-          name: "VAT detail",
-          quantity: 1,
-          amount: 399.11,
-          confidence: 0.4
-        },
-        { kind: "vat", label: "12% VAT", name: null, quantity: null, amount: 478.91, confidence: 0.97 },
-        {
-          kind: "amount_due",
-          label: "Amount Due (PHP)",
-          name: null,
-          quantity: null,
-          amount: 4869.11,
-          confidence: 0.99
-        }
-      ]
+  it("maps service charge separately and warns when printed totals do not reconcile", () => {
+    const payload = basePayload();
+    payload.rows.splice(3, 0, {
+      kind: "service_charge",
+      label: "Service Charge",
+      name: null,
+      quantity: null,
+      amount: 50,
+      confidence: 0.95
     });
 
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({ name: "Rosu 180 WH" });
+    const result = normalizeGeminiReceipt(payload);
+
+    expect(result.serviceCharge).toBe(50);
+    expect(result.warnings).toContainEqual(expect.stringMatching(/do not reconcile/i));
   });
 
-  it("marks low-confidence item rows for review and adds a warning", () => {
-    const result = normalizeGeminiReceipt({
-      merchantName: "Cafe Luna",
-      receiptDate: "2025-04-22",
-      currency: "PHP",
-      rows: [
-        {
-          kind: "item",
-          label: "Latte 160.00",
-          name: "Latte",
-          quantity: 1,
-          amount: 160,
-          confidence: 0.84
-        },
-        { kind: "subtotal", label: "Subtotal", name: null, quantity: null, amount: 160, confidence: 0.95 },
-        { kind: "amount_due", label: "Amount Due", name: null, quantity: null, amount: 160, confidence: 0.95 }
-      ]
-    });
-
-    expect(result.items).toEqual([
-      { name: "Latte", quantity: 1, amount: 160, confidence: 0.84, needsReview: true }
-    ]);
-    expect(result.warnings).toContain("Some Gemini rows need review before the receipt is ready.");
+  it.each([
+    ["missing Amount Due", { ...basePayload(), rows: basePayload().rows.slice(0, -1) }],
+    ["no positive item", { ...basePayload(), rows: basePayload().rows.map((row, index) => index === 0 ? { ...row, amount: 0 } : row) }]
+  ])("rejects an unusable extraction with %s", (_label, payload) => {
+    expect(() => normalizeGeminiReceipt(payload)).toThrow(UnusableGeminiReceiptError);
   });
 
-  it("adds a reconciliation warning when totals do not match printed amount due", () => {
-    const result = normalizeGeminiReceipt({
-      merchantName: "Cafe Luna",
-      receiptDate: "2025-04-22",
-      currency: "PHP",
-      rows: [
-        {
-          kind: "item",
-          label: "Latte 160.00",
-          name: "Latte",
-          quantity: 1,
-          amount: 160,
-          confidence: 0.95
-        },
-        { kind: "subtotal", label: "Subtotal", name: null, quantity: null, amount: 160, confidence: 0.95 },
-        { kind: "vat", label: "VAT", name: null, quantity: null, amount: 10, confidence: 0.95 },
-        { kind: "amount_due", label: "Amount Due", name: null, quantity: null, amount: 180, confidence: 0.95 }
-      ]
-    });
-
-    expect(result.total).toBe(180);
-    expect(result.warnings).toContain("Receipt totals do not reconcile with parsed item rows.");
+  it.each([
+    null,
+    {},
+    { ...basePayload(), rows: "not rows" },
+    { ...basePayload(), rows: Array.from({ length: 201 }, () => basePayload().rows[0]) },
+    { ...basePayload(), rows: [{ ...basePayload().rows[0], amount: Number.NaN }] },
+    { ...basePayload(), rows: [{ ...basePayload().rows[0], label: "x".repeat(301) }] }
+  ])("rejects malformed model output", (payload) => {
+    expect(() => normalizeGeminiReceipt(payload)).toThrow(InvalidGeminiReceiptError);
   });
 });

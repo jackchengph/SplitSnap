@@ -37,6 +37,14 @@ export interface GeminiReceiptPayload {
   rows: GeminiReceiptRow[];
 }
 
+interface ParsedGeminiReceiptRow extends GeminiReceiptRow {
+  quantityWasNormalized: boolean;
+}
+
+interface ParsedGeminiReceiptPayload extends Omit<GeminiReceiptPayload, "rows"> {
+  rows: ParsedGeminiReceiptRow[];
+}
+
 export class InvalidGeminiReceiptError extends Error {
   constructor(message: string) {
     super(message);
@@ -115,27 +123,36 @@ function asKind(value: unknown, fieldName: string): GeminiReceiptRowKind {
   return value;
 }
 
-function asQuantity(value: unknown, rowKind: GeminiReceiptRowKind, fieldName: string): number | null {
+function asQuantity(
+  value: unknown,
+  rowKind: GeminiReceiptRowKind,
+  fieldName: string
+): { quantity: number | null; normalized: boolean } {
   if (value === null) {
     if (rowKind === "item") {
-      throw new InvalidGeminiReceiptError(`${fieldName} must be a positive integer for item rows.`);
+      return { quantity: 1, normalized: true };
     }
 
-    return null;
-  }
-
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new InvalidGeminiReceiptError(`${fieldName} must be a positive integer.`);
+    return { quantity: null, normalized: false };
   }
 
   if (rowKind !== "item") {
     throw new InvalidGeminiReceiptError(`${fieldName} must be null for summary rows.`);
   }
 
-  return value;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new InvalidGeminiReceiptError(`${fieldName} must be a finite number or null.`);
+  }
+
+  if (value <= 0) {
+    return { quantity: 1, normalized: true };
+  }
+
+  const rounded = Math.max(1, Math.round(value));
+  return { quantity: rounded, normalized: rounded !== value };
 }
 
-function parseRow(value: unknown, index: number): GeminiReceiptRow {
+function parseRow(value: unknown, index: number): ParsedGeminiReceiptRow {
   if (!isRecord(value)) {
     throw new InvalidGeminiReceiptError(`rows[${index}] must be an object.`);
   }
@@ -143,14 +160,18 @@ function parseRow(value: unknown, index: number): GeminiReceiptRow {
   const kind = asKind(value.kind, `rows[${index}].kind`);
   const label = asString(value.label, `rows[${index}].label`, MAX_LABEL_LENGTH);
   const name = asOptionalString(value.name, `rows[${index}].name`, MAX_NAME_LENGTH);
-  const quantity = asQuantity(value.quantity, kind, `rows[${index}].quantity`);
+  const { quantity, normalized: quantityWasNormalized } = asQuantity(
+    value.quantity,
+    kind,
+    `rows[${index}].quantity`
+  );
   const amount = roundMoney(asFiniteNumber(value.amount, `rows[${index}].amount`));
   const confidence = asConfidence(value.confidence, `rows[${index}].confidence`);
 
-  return { kind, label, name, quantity, amount, confidence };
+  return { kind, label, name, quantity, amount, confidence, quantityWasNormalized };
 }
 
-function parsePayload(payload: unknown): GeminiReceiptPayload {
+function parsePayload(payload: unknown): ParsedGeminiReceiptPayload {
   if (!isRecord(payload)) {
     throw new InvalidGeminiReceiptError("Gemini receipt payload must be an object.");
   }
@@ -221,7 +242,11 @@ export function normalizeGeminiReceipt(payload: unknown): NormalizedReceiptExtra
         }
 
         const { name, missingName } = normalizeItemName(row);
-        const needsReview = missingName || row.confidence < LOW_CONFIDENCE_THRESHOLD || row.amount <= 0;
+        const needsReview =
+          missingName ||
+          row.quantityWasNormalized ||
+          row.confidence < LOW_CONFIDENCE_THRESHOLD ||
+          row.amount <= 0;
 
         if (row.amount > 0) {
           positiveItemCount += 1;
