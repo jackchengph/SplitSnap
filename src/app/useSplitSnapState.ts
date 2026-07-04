@@ -301,22 +301,15 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
           : []
       );
     } catch (error) {
-      const warning = `Receipt parsing failed: ${
-        error instanceof Error ? error.message : "Unknown parser error."
-      }`;
-      const recoveryReceipt = buildCaptureRecoveryReceipt(
-        imageDataUrl,
-        participantIds,
-        warning
-      );
-
-      setReceipt(recoveryReceipt);
-      setParseStatus("Needs manual review");
+      const warning = "Gemini could not finish this scan. Check your connection and try the receipt again.";
+      setParseStatus("Gemini scan failed");
       setParseWarnings([warning]);
       setNotifications([]);
-    } finally {
-      setPayerStep("review");
+      setPayerStep("scanner");
+      throw error;
     }
+
+    setPayerStep("review");
   }
 
   function toggleItemParticipant(itemId: string, participantId: string) {

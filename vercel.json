@@ -8,7 +8,8 @@
   ],
   "functions": {
     "api/receipts/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 60,
+      "regions": ["sin1"]
     },
     "api/**/*.ts": {
       "maxDuration": 10

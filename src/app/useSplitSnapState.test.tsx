@@ -224,7 +224,7 @@ describe("useSplitSnapState", () => {
     expect(result.current.notifications).toEqual([]);
   });
 
-  it("preserves the captured image and reaches review when parsing rejects unexpectedly", async () => {
+  it("preserves the captured image and stays on the scanner when Gemini rejects", async () => {
     let rejectParsing: (error: Error) => void = () => undefined;
     const parseReceipt = vi.fn().mockImplementation(
       () =>
@@ -245,18 +245,14 @@ describe("useSplitSnapState", () => {
 
     await act(async () => {
       rejectParsing(new Error("unexpected parser failure"));
-      await expect(capture).resolves.toBeUndefined();
+      await expect(capture).rejects.toThrow("unexpected parser failure");
     });
 
-    expect(result.current.payerStep).toBe("review");
+    expect(result.current.payerStep).toBe("scanner");
     expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,rejected-scan");
-    expect(result.current.receipt.items[0]).toMatchObject({
-      name: "Unrecognized item",
-      price: 0,
-      needsReview: true
-    });
+    expect(result.current.parseStatus).toBe("Gemini scan failed");
     expect(result.current.parseWarnings).toContainEqual(
-      expect.stringMatching(/unexpected parser failure/i)
+      expect.stringMatching(/Gemini could not finish/i)
     );
     expect(result.current.notifications).toEqual([]);
   });

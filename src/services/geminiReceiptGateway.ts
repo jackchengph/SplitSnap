@@ -2,6 +2,7 @@ import type {
   NormalizedReceiptExtraction,
   NormalizedReceiptItem
 } from "../domain/geminiReceiptTypes";
+import { prepareGeminiReceiptImage } from "./receiptImagePreprocessor";
 
 interface GeminiGatewayOptions {
   fetcher?: typeof fetch;
@@ -68,13 +69,14 @@ export async function requestGeminiReceipt(
   options: GeminiGatewayOptions = {}
 ): Promise<NormalizedReceiptExtraction> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 25_000);
+  const optimizedImage = await prepareGeminiReceiptImage(imageDataUrl);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 55_000);
 
   try {
     const response = await (options.fetcher ?? fetch)("/api/receipts/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageDataUrl }),
+      body: JSON.stringify({ imageDataUrl: optimizedImage }),
       signal: controller.signal
     });
 

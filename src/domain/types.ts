@@ -5,6 +5,7 @@ export type ParseStatus =
   | "Idle"
   | "Scanning receipt"
   | "Reading receipt with Gemini"
+  | "Gemini scan failed"
   | "Trying on-device OCR"
   | "OCR reading items"
   | "Analyzing receipt layout"

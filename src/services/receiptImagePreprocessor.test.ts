@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { prepareReceiptImages, type ImageBrowser } from "./receiptImagePreprocessor";
+import {
+  prepareGeminiReceiptImage,
+  prepareReceiptImages,
+  type ImageBrowser
+} from "./receiptImagePreprocessor";
 
 interface FakeImageBitmap {
   width: number;
@@ -184,6 +188,15 @@ function parseVariantPixels(imageDataUrl: string): number[] {
 }
 
 describe("prepareReceiptImages", () => {
+  it("compresses the Gemini upload to a 2000-pixel JPEG", async () => {
+    const records: FakeCanvasRecord[] = [];
+    const browser = createDimensionOnlyBrowser({ width: 4000, height: 2000 }, records);
+
+    const result = await prepareGeminiReceiptImage("data:image/png;base64,large", browser);
+
+    expect(result).toBe("mock://canvas/2000x1000");
+    expect(records).toHaveLength(1);
+  });
   it("always preserves the original image when browser preprocessing is unavailable", async () => {
     await expect(prepareReceiptImages("data:image/png;base64,abc", createUnavailableBrowser())).resolves.toEqual([
       { name: "original", imageDataUrl: "data:image/png;base64,abc" }

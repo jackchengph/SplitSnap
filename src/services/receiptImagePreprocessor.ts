@@ -26,7 +26,7 @@ interface BrowserCanvas {
   width: number;
   height: number;
   getContext(kind: "2d"): BrowserCanvasContext | null;
-  toDataURL(type?: string): string;
+  toDataURL(type?: string, quality?: number): string;
 }
 
 export interface ImageBrowser {
@@ -35,6 +35,7 @@ export interface ImageBrowser {
 }
 
 const maxLongestEdge = 3200;
+const geminiLongestEdge = 2000;
 const maxUpscaleFactor = 2;
 const highContrastThreshold = 160;
 const paperBrightnessThreshold = 120;
@@ -73,6 +74,29 @@ const defaultImageBrowser: ImageBrowser = {
     return canvas as unknown as BrowserCanvas;
   }
 };
+
+export async function prepareGeminiReceiptImage(
+  imageDataUrl: string,
+  browser: ImageBrowser = defaultImageBrowser
+): Promise<string> {
+  if (browser === defaultImageBrowser && imageDataUrl.length < 1024) return imageDataUrl;
+  try {
+    const image = await browser.loadImage(imageDataUrl);
+    const longestEdge = Math.max(image.width, image.height);
+    const scale = Math.min(1, geminiLongestEdge / longestEdge);
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = browser.createCanvas(width, height);
+    const context = canvas.getContext("2d");
+    if (!context) return imageDataUrl;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch {
+    return imageDataUrl;
+  }
+}
 
 export async function prepareReceiptImages(
   imageDataUrl: string,

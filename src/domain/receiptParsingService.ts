@@ -215,12 +215,6 @@ export async function parseCapturedReceipt(
   reportStatus(input, statuses, "Scanning receipt");
   reportStatus(input, statuses, "Reading receipt with Gemini");
 
-  try {
-    const extraction = await dependencies.requestGeminiReceipt(input.imageDataUrl);
-    return buildGeminiResult(input, extraction, statuses);
-  } catch {
-    const warnings = ["Gemini receipt scanning was unavailable, so SplitSnap used local OCR."];
-    reportStatus(input, statuses, "Trying on-device OCR");
-    return parseWithLocalOcr(input, dependencies, statuses, warnings);
-  }
+  const extraction = await dependencies.requestGeminiReceipt(input.imageDataUrl);
+  return buildGeminiResult(input, extraction, statuses);
 }

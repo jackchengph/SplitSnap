@@ -60,6 +60,8 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
     setIsProcessing(true);
     try {
       await onCapture(imageDataUrl);
+    } catch {
+      setUploadError("Gemini could not finish this scan. Try again with a clear, well-lit receipt photo.");
     } finally {
       setIsProcessing(false);
     }
@@ -101,7 +103,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
     <main className="app-shell narrow-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Camera + OCR</p>
+          <p className="eyebrow">Gemini receipt scanner</p>
           <h1>Scan receipt</h1>
         </div>
         <button type="button" className="secondary nav-button" onClick={onHome}>
@@ -124,7 +126,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
           <div>
             <strong>{cameraMessage}</strong>
             <p className="muted">
-              Align the whole receipt inside the highlighted frame, then capture. SplitSnap compares multiple image treatments, receipt columns, and totals; uncertain rows stay editable.
+              Align the whole receipt inside the highlighted frame, then capture. Gemini reads the receipt and uncertain rows stay editable.
             </p>
           </div>
           <button type="button" onClick={captureFrame} disabled={isProcessing}>
@@ -145,7 +147,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
         </label>
         {uploadError ? <div className="notice warning" role="alert">{uploadError}</div> : null}
         <div className="parse-steps" aria-label="Receipt parse status">
-          {["Scanning receipt", "Reading receipt with Gemini", "Trying on-device OCR", "OCR reading items", "Analyzing receipt layout", "Needs manual review", "Ready to split"].map(
+          {["Scanning receipt", "Reading receipt with Gemini", "Gemini scan failed", "Needs manual review", "Ready to split"].map(
             (status) => (
               <span className={parseStatus === status ? "tag active" : "tag"} key={status}>
                 {status}

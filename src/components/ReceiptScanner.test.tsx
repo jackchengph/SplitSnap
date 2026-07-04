@@ -11,7 +11,7 @@ describe("ReceiptScanner", () => {
     });
   });
 
-  it.each(["Reading receipt with Gemini", "Trying on-device OCR"] as const)(
+  it.each(["Reading receipt with Gemini", "Gemini scan failed"] as const)(
     "shows %s as the active processing stage",
     async (parseStatus) => {
       render(
@@ -28,7 +28,7 @@ describe("ReceiptScanner", () => {
     }
   );
 
-  it("passes an uploaded receipt image to the OCR capture path", async () => {
+  it("passes an uploaded receipt image to the Gemini capture path", async () => {
     const onCapture = vi.fn();
     const user = userEvent.setup();
     render(
@@ -51,7 +51,7 @@ describe("ReceiptScanner", () => {
     });
   });
 
-  it("rejects non-image uploads before OCR", async () => {
+  it("rejects non-image uploads before Gemini", async () => {
     const onCapture = vi.fn();
     render(
       <ReceiptScanner
