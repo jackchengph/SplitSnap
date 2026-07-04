@@ -213,7 +213,7 @@ export async function parseCapturedReceipt(
 ): Promise<ParseReceiptResult> {
   const statuses: ParseStatus[] = [];
   reportStatus(input, statuses, "Scanning receipt");
-  reportStatus(input, statuses, "Reading receipt with Gemini");
+  reportStatus(input, statuses, "Reading receipt");
 
   const extraction = await dependencies.requestGeminiReceipt(input.imageDataUrl);
   return buildGeminiResult(input, extraction, statuses);

@@ -70,7 +70,7 @@ describe("receiptParsingService", () => {
     ]);
     expect(result.statuses).toEqual([
       "Scanning receipt",
-      "Reading receipt with Gemini",
+      "Reading receipt",
       "Needs manual review"
     ]);
   });
@@ -210,7 +210,7 @@ describe("receiptParsingService", () => {
     });
     expect(result.statuses).toEqual([
       "Scanning receipt",
-      "Reading receipt with Gemini",
+      "Reading receipt",
       "Trying on-device OCR",
       "OCR reading items",
       "Analyzing receipt layout",

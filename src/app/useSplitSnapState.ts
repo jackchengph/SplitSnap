@@ -275,7 +275,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     setCapturedReceiptImageUrl(imageDataUrl);
 
     const participantIds = activeGroup.participantIds;
-    setParseStatus("Reading receipt with Gemini");
+    setParseStatus("Reading receipt");
 
     try {
       const parseReceipt = options.parseReceipt ?? parseCapturedReceipt;
@@ -301,8 +301,8 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
           : []
       );
     } catch (error) {
-      const warning = "Gemini could not finish this scan. Check your connection and try the receipt again.";
-      setParseStatus("Gemini scan failed");
+      const warning = "The receipt scan could not finish. Check your connection and try again.";
+      setParseStatus("Scan failed");
       setParseWarnings([warning]);
       setNotifications([]);
       setPayerStep("scanner");

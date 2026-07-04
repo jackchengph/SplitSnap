@@ -50,7 +50,7 @@ export function ItemAssignment({
                         : item.parseSource === "manual"
                           ? "Manual review"
                           : item.parseSource === "gemini"
-                            ? "Gemini"
+                            ? "Scanned"
                             : "OCR"}
                     </span>
                   ) : null}

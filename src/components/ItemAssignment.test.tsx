@@ -4,7 +4,7 @@ import { demoGroup, demoReceipt, mockFriends } from "../domain/mockData";
 import { ItemAssignment } from "./ItemAssignment";
 
 describe("ItemAssignment", () => {
-  it("labels Gemini-extracted rows accurately", () => {
+  it("labels extracted rows without naming the provider", () => {
     render(
       <ItemAssignment
         receipt={{
@@ -20,7 +20,8 @@ describe("ItemAssignment", () => {
       />
     );
 
-    expect(screen.getByText("Gemini")).toBeInTheDocument();
+    expect(screen.getByText("Scanned")).toBeInTheDocument();
+    expect(screen.queryByText("Gemini")).not.toBeInTheDocument();
   });
 
   it("lets the payer edit an item quantity", () => {

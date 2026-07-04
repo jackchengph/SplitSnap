@@ -11,7 +11,7 @@ describe("ReceiptScanner", () => {
     });
   });
 
-  it.each(["Reading receipt with Gemini", "Gemini scan failed"] as const)(
+  it.each(["Reading receipt", "Scan failed"] as const)(
     "shows %s as the active processing stage",
     async (parseStatus) => {
       render(

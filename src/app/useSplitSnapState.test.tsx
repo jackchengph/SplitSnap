@@ -132,7 +132,7 @@ describe("useSplitSnapState", () => {
   it("tracks Gemini and local OCR progress reported by the parser", async () => {
     let finishParsing: (() => void) | undefined;
     const parseReceipt = vi.fn().mockImplementation(async (input) => {
-      input.onStatus?.("Reading receipt with Gemini");
+      input.onStatus?.("Reading receipt");
       input.onStatus?.("Trying on-device OCR");
       input.onStatus?.("OCR reading items");
       await new Promise<void>((resolve) => { finishParsing = resolve; });
@@ -240,7 +240,7 @@ describe("useSplitSnapState", () => {
     });
 
     expect(result.current.payerStep).toBe("parsing");
-    expect(result.current.parseStatus).toBe("Reading receipt with Gemini");
+    expect(result.current.parseStatus).toBe("Reading receipt");
     expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,rejected-scan");
 
     await act(async () => {
@@ -250,9 +250,9 @@ describe("useSplitSnapState", () => {
 
     expect(result.current.payerStep).toBe("scanner");
     expect(result.current.capturedReceiptImageUrl).toBe("data:image/png;base64,rejected-scan");
-    expect(result.current.parseStatus).toBe("Gemini scan failed");
+    expect(result.current.parseStatus).toBe("Scan failed");
     expect(result.current.parseWarnings).toContainEqual(
-      expect.stringMatching(/Gemini could not finish/i)
+      expect.stringMatching(/scan could not finish/i)
     );
     expect(result.current.notifications).toEqual([]);
   });
