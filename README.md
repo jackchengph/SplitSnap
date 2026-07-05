@@ -9,8 +9,8 @@ npm install
 npm run dev -- --port 5174
 ```
 
-The Vite-only command uses local OCR fallback because it does not run Vercel
-Functions. To test Gemini receipt scanning locally, use the linked Vercel
+The Vite-only command does not run Vercel Functions, so receipt scanning is
+unavailable. To test the complete receipt flow locally, use the linked Vercel
 runtime instead:
 
 ```bash
@@ -93,7 +93,12 @@ device.
 
 The repository contains real Google authentication, Firestore and Storage service boundaries, friend-code connection logic, PWA installation, push-token registration, and an authenticated push endpoint. Without a configured Firebase project, the current receipt screens run in local-only mode.
 
-Receipt scanning uses Gemini first when the Vercel Function and server key are available. Items stop at subtotal, VAT maps to tax, and Amount Due is the final total. Network, quota, configuration, or validation failures automatically use the browser Tesseract pipeline; uncertain rows remain editable. Screenshot payment validation is automated prototype validation, not bank-provider verification.
+Receipt scanning uses the server-side multimodal provider when the Vercel Function and server key are available. Items stop at total or subtotal, VAT maps to tax, discounts reduce balances, and Amount Due is the final total. Scanning failures remain on the scanner for retry; local OCR is never used as a substitute. Screenshot payment validation is automated prototype validation, not bank-provider verification.
+
+## Project Handoff
+
+For maintenance on a new device, account, or coding assistant, read
+[`AGENTS.md`](AGENTS.md) and [`docs/PROJECT_HANDOFF.md`](docs/PROJECT_HANDOFF.md).
 
 ## Restaurant Image Credits
 
