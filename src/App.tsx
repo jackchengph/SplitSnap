@@ -172,6 +172,7 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
         onHome={goHome}
         onUpload={state.uploadReceipt}
         onToggleParticipant={state.toggleItemParticipant}
+        onSetParticipants={state.setItemParticipants}
         onUpdatePrice={state.updateItemPrice}
         onUpdateName={state.updateItemName}
         onUpdateQuantity={state.updateItemQuantity}
@@ -208,6 +209,8 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
     content = (
       <ActivityPage
         friends={state.friends}
+        group={state.group}
+        receipt={state.receipt}
         split={state.split}
         onOpenParticipant={(participantId) => {
           state.setActiveParticipantId(participantId);

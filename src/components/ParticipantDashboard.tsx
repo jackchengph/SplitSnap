@@ -55,7 +55,7 @@ export function ParticipantDashboard({
             </select>
           </label>
           <div className="amount-due-card">
-            <span>Amount owed to Maya</span>
+            <span>Amount owed to you</span>
             <strong>{formatCurrency(splitResult?.totalOwed ?? 0)}</strong>
             <p>Status: {splitResult?.status ?? "paid"}</p>
           </div>

@@ -25,6 +25,7 @@ export function GroupSetup({
         <div>
           <p className="eyebrow">Dinner group</p>
           <h1>Who joined this meal?</h1>
+          <p className="muted">Pick the friends who should appear when you assign receipt items.</p>
         </div>
         <button type="button" className="secondary nav-button" onClick={onHome}>
           Home

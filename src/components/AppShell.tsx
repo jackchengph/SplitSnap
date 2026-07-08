@@ -20,7 +20,7 @@ interface AppShellProps {
 const navigation = [
   { page: "home" as const, label: "Home", icon: Home },
   { page: "friends" as const, label: "Friends", icon: UsersRound },
-  { page: "activity" as const, label: "Activity", icon: ReceiptText },
+  { page: "activity" as const, label: "Meals", icon: ReceiptText },
   { page: "profile" as const, label: "Profile", icon: UserRound }
 ];
 
@@ -69,7 +69,7 @@ export function AppShell({
             <button
               type="button"
               className="icon-button"
-              aria-label="Notifications"
+              aria-label="Open meals and reminders"
               onClick={() => onNavigate("activity")}
             >
               <Bell aria-hidden="true" size={19} />

@@ -170,12 +170,12 @@ describe("App", () => {
     expect(parseReceipt).toHaveBeenCalledOnce();
   });
 
-  it("opens a participant breakdown from Activity and validates proof", async () => {
+  it("opens a participant breakdown from Meals and validates proof", async () => {
     const user = userEvent.setup();
     await renderApp();
     await enterPreview(user);
     await user.click(
-      within(desktopNavigation()).getByRole("button", { name: "Activity" })
+      within(desktopNavigation()).getByRole("button", { name: "Meals" })
     );
     await user.click(screen.getByRole("button", { name: /Nico/i }));
 

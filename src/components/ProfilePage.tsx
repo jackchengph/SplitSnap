@@ -47,13 +47,17 @@ export function ProfilePage({
         <span className="profile-avatar">{user.displayName.slice(0, 1)}</span>
         <div>
           <p className="eyebrow">Profile</p>
-          <h1>{user.displayName}</h1>
-          <p className="muted">{mode === "local" ? "Local preview" : user.email}</p>
+          <h1>Your profile</h1>
+          <p className="muted">
+            {mode === "local"
+              ? `Previewing as ${user.displayName}`
+              : user.email}
+          </p>
         </div>
       </header>
       <section className="profile-grid">
         <article className="panel">
-          <p className="eyebrow">Friend code</p>
+          <p className="eyebrow">Your friend code</p>
           <strong className="friend-code">{profile.friendCode}</strong>
           <p className="muted">Share this code with people you know.</p>
         </article>

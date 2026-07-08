@@ -332,6 +332,20 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }));
   }
 
+  function setItemParticipants(itemId: string, participantIds: string[]) {
+    setReceipt((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              assignedParticipantIds: [...new Set(participantIds)]
+            }
+          : item
+      )
+    }));
+  }
+
   function updateItemPrice(itemId: string, price: number) {
     setReceipt((current) => ({
       ...current,
@@ -486,6 +500,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     useRestaurantMenu,
     useManualReceipt,
     toggleItemParticipant,
+    setItemParticipants,
     updateItemPrice,
     updateItemName,
     updateItemQuantity,

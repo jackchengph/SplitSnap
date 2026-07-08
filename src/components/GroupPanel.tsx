@@ -12,7 +12,7 @@ export function GroupPanel({ friends, group }: GroupPanelProps) {
   return (
     <section className="panel">
       <div className="section-heading">
-        <p className="eyebrow">Group</p>
+        <p className="eyebrow">Dinner group</p>
         <h2>{group.name}</h2>
       </div>
       <div className="friend-list">
