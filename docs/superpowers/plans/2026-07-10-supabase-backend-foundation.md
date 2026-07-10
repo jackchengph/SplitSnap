@@ -97,7 +97,7 @@
 - Consume: `saveExpense`, `saveSupabaseExpense`, `saveSupabaseDeviceToken`
 - Produce: persisted live workspace state across devices
 
-- [ ] Wire profile bootstrap to upsert Supabase `profiles`.
+- [x] Wire profile bootstrap to upsert Supabase `profiles`.
 - [ ] Save every created split after receipt/menu/manual review.
 - [ ] Load user dinners from Supabase on app start.
 - [ ] Store payment proof uploads in Supabase Storage.

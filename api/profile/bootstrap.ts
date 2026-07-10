@@ -6,6 +6,8 @@ import {
   type ApiResponse
 } from "../_lib/authenticatedRequest.js";
 import { adminAuth, adminFirestore } from "../_lib/firebaseAdmin.js";
+import { upsertSupabaseProfile } from "../_lib/supabaseProfiles.js";
+import { createSupabaseServiceClient } from "../_lib/supabaseServer.js";
 
 interface BootstrapBody {
   timezone?: unknown;
@@ -287,6 +289,11 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         return profile;
       }
     );
+
+    const supabase = createSupabaseServiceClient();
+    if (supabase) {
+      await upsertSupabaseProfile(supabase as never, createdProfile);
+    }
 
     response.status(200).json(createdProfile);
   } catch (error) {
