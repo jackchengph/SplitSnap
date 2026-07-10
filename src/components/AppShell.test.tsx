@@ -25,7 +25,9 @@ describe("AppShell", () => {
       within(desktopNavigation).getByRole("button", { name: "Friends" })
     );
     expect(onNavigate).toHaveBeenCalledWith("friends");
-    await user.click(screen.getByRole("button", { name: "Notifications" }));
+    await user.click(
+      screen.getByRole("button", { name: "Open meals and reminders" })
+    );
     expect(onNavigate).toHaveBeenCalledWith("activity");
     expect(
       within(desktopNavigation).getByRole("button", { name: "Home" })
