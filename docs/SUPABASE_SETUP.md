@@ -1,6 +1,20 @@
 # SplitSnap Supabase Setup
 
-Use this once to connect the production Supabase project to the existing SplitSnap backend code.
+Use this to understand the production Supabase setup for SplitSnap.
+
+## Current Status
+
+As of 2026-07-10:
+
+- Supabase MCP server is configured for project `meevrauqdqqlwpmkycwh`.
+- Project name verified through MCP: `jackchengph's Project`.
+- Migration `backend_foundation` has been applied to Supabase.
+- Core tables verified: `profiles`, `dinners`, `receipt_scans`, `receipt_items`, `dinner_member_statuses`, `payment_proofs`, `user_devices`, `notification_events`.
+- Vercel Production env vars added: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`.
+- Still missing in Vercel: `SUPABASE_SERVICE_ROLE_KEY`.
+- Production app was redeployed and public URL returned HTTP 200.
+
+The setup is usable for frontend Supabase configuration now. Server-side Supabase writes that require privileged access, including profile mirroring and reminder token lookup, will not activate until `SUPABASE_SERVICE_ROLE_KEY` is added to Vercel.
 
 ## What Supabase Handles
 

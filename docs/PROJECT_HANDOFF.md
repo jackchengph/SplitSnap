@@ -94,6 +94,8 @@ The receipt function runs in Vercel `sin1` with a 60-second maximum duration. A 
 - Firebase remains active for Google auth and Firebase Cloud Messaging during the transition. Current Supabase profile IDs are text values compatible with Firebase UIDs.
 - `supabase/migrations/202607101935_backend_foundation.sql` creates the first-generation Supabase schema with RLS policies and integer-cent money columns.
 - `docs/SUPABASE_SETUP.md` contains the one-time project linking, migration, and Vercel env setup commands.
+- Supabase project `meevrauqdqqlwpmkycwh` has the `backend_foundation` migration applied and core tables verified.
+- Vercel Production has `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `SUPABASE_URL`; `SUPABASE_SERVICE_ROLE_KEY` is still missing and must be added before server-side Supabase writes activate.
 - `POST /api/profile/bootstrap` now mirrors complete Firebase-authenticated profiles into Supabase `profiles` when `SUPABASE_SERVICE_ROLE_KEY` is configured.
 - The existing `cloudWorkspace` facade now prefers Supabase for expense and FCM device-token writes when Supabase browser env vars are configured, and falls back to Firestore otherwise.
 - `POST /api/notifications/send` now prefers Supabase for reminder authorization and FCM token lookup when `SUPABASE_SERVICE_ROLE_KEY` is configured, and falls back to Firestore otherwise.
