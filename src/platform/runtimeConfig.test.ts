@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getFirebaseClientConfig } from "./runtimeConfig";
+import {
+  getFirebaseClientConfig,
+  getSupabaseClientConfig
+} from "./runtimeConfig";
 
 const completeEnvironment = {
   VITE_FIREBASE_API_KEY: "api-key",
@@ -27,6 +30,29 @@ describe("getFirebaseClientConfig", () => {
       getFirebaseClientConfig({
         ...completeEnvironment,
         VITE_FIREBASE_PROJECT_ID: " "
+      })
+    ).toBeNull();
+  });
+});
+
+describe("getSupabaseClientConfig", () => {
+  it("returns a Supabase config when the browser-safe values exist", () => {
+    expect(
+      getSupabaseClientConfig({
+        VITE_SUPABASE_URL: "https://splitsnap.supabase.co",
+        VITE_SUPABASE_ANON_KEY: "anon-key"
+      })
+    ).toEqual({
+      url: "https://splitsnap.supabase.co",
+      anonKey: "anon-key"
+    });
+  });
+
+  it("returns null when Supabase values are missing or blank", () => {
+    expect(
+      getSupabaseClientConfig({
+        VITE_SUPABASE_URL: "https://splitsnap.supabase.co",
+        VITE_SUPABASE_ANON_KEY: " "
       })
     ).toBeNull();
   });

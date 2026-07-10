@@ -7,6 +7,11 @@ export interface FirebaseClientConfig {
   appId: string;
 }
 
+export interface SupabaseClientConfig {
+  url: string;
+  anonKey: string;
+}
+
 type Environment = Record<string, string | boolean | undefined>;
 
 const firebaseEnvironmentKeys = {
@@ -31,4 +36,19 @@ export function getFirebaseClientConfig(
   }
 
   return Object.fromEntries(entries) as unknown as FirebaseClientConfig;
+}
+
+export function getSupabaseClientConfig(
+  environment: Environment
+): SupabaseClientConfig | null {
+  const url =
+    typeof environment.VITE_SUPABASE_URL === "string"
+      ? environment.VITE_SUPABASE_URL.trim()
+      : "";
+  const anonKey =
+    typeof environment.VITE_SUPABASE_ANON_KEY === "string"
+      ? environment.VITE_SUPABASE_ANON_KEY.trim()
+      : "";
+
+  return url && anonKey ? { url, anonKey } : null;
 }

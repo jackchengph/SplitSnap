@@ -13,6 +13,12 @@ import type {
   Receipt
 } from "../domain/types";
 import { firebaseRuntime } from "../platform/firebase";
+import { supabaseRuntime } from "../platform/supabase";
+import {
+  buildSupabaseExpenseRows,
+  saveSupabaseDeviceToken,
+  saveSupabaseExpense
+} from "./supabaseWorkspace";
 
 export interface CloudExpenseDocument {
   id: string;
@@ -82,6 +88,27 @@ export function canSendExpenseReminder(
 export async function saveExpense(
   expense: CloudExpenseDocument
 ): Promise<void> {
+  if (supabaseRuntime.client) {
+    await saveSupabaseExpense(
+      supabaseRuntime.client,
+      buildSupabaseExpenseRows({
+        expenseId: expense.id,
+        payerId: expense.payerId,
+        group: {
+          id: expense.id,
+          name: expense.name,
+          payerId: expense.payerId,
+          participantIds: expense.participantIds
+        },
+        receipt: expense.receipt,
+        statuses: expense.statuses,
+        updatedAt: expense.updatedAt,
+        createdAt: expense.createdAt
+      })
+    );
+    return;
+  }
+
   await setDoc(doc(requireFirestore(), "expenses", expense.id), expense, {
     merge: true
   });
@@ -139,6 +166,17 @@ export async function saveDeviceToken(
   userId: string,
   token: string
 ): Promise<void> {
+  if (supabaseRuntime.client) {
+    await saveSupabaseDeviceToken(supabaseRuntime.client, {
+      userId,
+      token,
+      userAgent:
+        typeof navigator === "undefined" ? "Unknown browser" : navigator.userAgent,
+      updatedAt: new Date().toISOString()
+    });
+    return;
+  }
+
   await setDoc(
     doc(
       requireFirestore(),

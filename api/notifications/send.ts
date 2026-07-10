@@ -7,6 +7,11 @@ import {
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import {
+  canSendSupabaseReminder,
+  listSupabaseDeviceTokens
+} from "../_lib/supabaseNotifications.js";
+import { createSupabaseServiceClient } from "../_lib/supabaseServer.js";
 
 interface ApiRequest {
   method?: string;
@@ -60,29 +65,45 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       return;
     }
 
-    const firestore = getFirestore();
-    const expense = await firestore.collection("expenses").doc(expenseId).get();
-    const data = expense.data();
-    if (
-      !data ||
-      data.payerId !== caller.uid ||
-      !Array.isArray(data.participantIds) ||
-      !data.participantIds.includes(participantId) ||
-      participantId === caller.uid
-    ) {
-      response.status(403).json({ error: "Not allowed to send this reminder." });
-      return;
+    const supabase = createSupabaseServiceClient();
+    let tokens: string[] = [];
+    if (supabase) {
+      const allowed = await canSendSupabaseReminder(supabase as never, {
+        expenseId,
+        callerId: caller.uid,
+        participantId
+      });
+      if (!allowed) {
+        response.status(403).json({ error: "Not allowed to send this reminder." });
+        return;
+      }
+      tokens = await listSupabaseDeviceTokens(supabase as never, participantId);
+    } else {
+      const firestore = getFirestore();
+      const expense = await firestore.collection("expenses").doc(expenseId).get();
+      const data = expense.data();
+      if (
+        !data ||
+        data.payerId !== caller.uid ||
+        !Array.isArray(data.participantIds) ||
+        !data.participantIds.includes(participantId) ||
+        participantId === caller.uid
+      ) {
+        response.status(403).json({ error: "Not allowed to send this reminder." });
+        return;
+      }
+
+      const devices = await firestore
+        .collection("users")
+        .doc(participantId)
+        .collection("devices")
+        .where("enabled", "==", true)
+        .get();
+      tokens = devices.docs
+        .map((device) => device.data().token)
+        .filter((token): token is string => typeof token === "string");
     }
 
-    const devices = await firestore
-      .collection("users")
-      .doc(participantId)
-      .collection("devices")
-      .where("enabled", "==", true)
-      .get();
-    const tokens = devices.docs
-      .map((device) => device.data().token)
-      .filter((token): token is string => typeof token === "string");
     if (tokens.length === 0) {
       response.status(409).json({ error: "This friend has no push-enabled device." });
       return;

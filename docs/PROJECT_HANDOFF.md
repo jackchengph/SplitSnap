@@ -1,6 +1,6 @@
 # SplitSnap Project Handoff
 
-Last updated: 2026-07-06
+Last updated: 2026-07-10
 
 ## 1. Product
 
@@ -87,11 +87,15 @@ Key files:
 
 The receipt function runs in Vercel `sin1` with a 60-second maximum duration. A production Cara Mia scan was verified at about 40 seconds. Latency remains a known limitation.
 
-### Persistence and Auth
+### Persistence, Auth, and Push
 
-- Without Firebase client variables, the app runs in labeled Preview mode and persists workspace data in browser `localStorage` only.
-- Firebase interfaces exist for Google auth, Firestore, Storage, FCM tokens, friend requests, and cloud expenses.
-- Full cross-device persistence is not production-complete until a real Firebase project is configured and exercised end to end.
+- Without backend client variables, the app runs in labeled Preview mode and persists workspace data in browser `localStorage` only.
+- Supabase is now the intended primary backend for dinners, receipt scans, receipt items, payment statuses, payment proofs, device tokens, notification events, and future friend connections.
+- Firebase remains active for Google auth and Firebase Cloud Messaging during the transition. Current Supabase profile IDs are text values compatible with Firebase UIDs.
+- `supabase/migrations/202607101935_backend_foundation.sql` creates the first-generation Supabase schema with RLS policies and integer-cent money columns.
+- The existing `cloudWorkspace` facade now prefers Supabase for expense and FCM device-token writes when Supabase browser env vars are configured, and falls back to Firestore otherwise.
+- `POST /api/notifications/send` now prefers Supabase for reminder authorization and FCM token lookup when `SUPABASE_SERVICE_ROLE_KEY` is configured, and falls back to Firestore otherwise.
+- Full cross-device persistence is not complete until profiles are upserted into Supabase, created splits are saved from app state, and app startup loads user dinners from Supabase.
 
 ### Server APIs
 
@@ -123,9 +127,18 @@ VITE_FIREBASE_VAPID_KEY
 FIREBASE_SERVICE_ACCOUNT_JSON
 ```
 
+Optional until Supabase is enabled:
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+```
+
 Security rules:
 
-- `GEMINI_API_KEY` and `FIREBASE_SERVICE_ACCOUNT_JSON` are server secrets.
+- `GEMINI_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_JSON`, and `SUPABASE_SERVICE_ROLE_KEY` are server secrets.
 - Never expose them through a `VITE_` variable.
 - Store local secrets in ignored `.env.local`.
 - Store production secrets in Vercel Project Settings.
@@ -265,4 +278,3 @@ New environment variables:
 Known remaining issue:
 Next recommended task:
 ```
-
