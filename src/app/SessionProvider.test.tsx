@@ -15,6 +15,7 @@ const bootstrapProfileMock = vi.mocked(bootstrapProfile);
 const cloudUser: SessionUser = {
   id: "maya-uid",
   displayName: "Maya",
+  firstName: "Maya",
   email: "maya@example.com",
   photoURL: null
 };
@@ -149,6 +150,8 @@ describe("SessionProvider", () => {
           observeSession,
           getIdToken: vi.fn(),
           signInWithGoogle: vi.fn(),
+          signInWithEmail: vi.fn(),
+          createEmailAccount: vi.fn(),
           signOutUser: vi.fn()
         }}
       >
@@ -183,6 +186,8 @@ describe("SessionProvider", () => {
           observeSession,
           getIdToken,
           signInWithGoogle: vi.fn(),
+          signInWithEmail: vi.fn(),
+          createEmailAccount: vi.fn(),
           signOutUser: vi.fn()
         }}
       >
@@ -221,6 +226,8 @@ describe("SessionProvider", () => {
           observeSession,
           getIdToken,
           signInWithGoogle: vi.fn(),
+          signInWithEmail: vi.fn(),
+          createEmailAccount: vi.fn(),
           signOutUser: vi.fn()
         }}
       >

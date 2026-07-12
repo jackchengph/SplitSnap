@@ -104,6 +104,13 @@ describe("calculateSplit", () => {
     expect(summary.results.some((result) => result.participantId === "payer")).toBe(false);
   });
 
+  it("removes paid participants from active balances", () => {
+    const summary = calculateSplit(receipt, group, { a: "paid" });
+
+    expect(summary.results.some((result) => result.participantId === "a")).toBe(false);
+    expect(summary.results.map((result) => result.participantId)).toEqual(["b", "c"]);
+  });
+
   it("warns about unassigned items", () => {
     const unassignedReceipt = {
       ...receipt,

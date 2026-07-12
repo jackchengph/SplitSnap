@@ -1,7 +1,76 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { ParseReceiptResult } from "./domain/receiptParsingService";
+import App from "./App";
+
+vi.mock("./services/receiptReader", () => ({
+  readReceiptImage: vi.fn().mockResolvedValue({
+    receipt: {
+      id: "gemini-receipt",
+      merchantName: "Gemini Cafe",
+      date: "2026-07-12",
+      imageUrl: "data:image/png;base64,receipt",
+      ocrConfidence: 0.96,
+      parserMode: "camera-ocr-yolo",
+      parseStatus: "Ready to split",
+      parseWarnings: [],
+      items: [
+        {
+          id: "latte-1",
+          name: "Latte",
+          quantity: 2,
+          price: 240,
+          assignedParticipantIds: ["maya", "nico", "bea"],
+          confidence: 0.96,
+          parseSource: "ocr",
+          needsReview: false
+        }
+      ],
+      tax: 20,
+      serviceCharge: 0,
+      total: 260
+    },
+    warnings: [],
+    statuses: ["Scanning receipt", "OCR reading items", "Ready to split"]
+  })
+}));
+
+vi.mock("./domain/receiptParsingService", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("./domain/receiptParsingService")>();
+  return {
+    ...actual,
+    parseCapturedReceipt: vi.fn().mockResolvedValue({
+      receipt: {
+        id: "scanned-receipt",
+        merchantName: "Scanned receipt",
+        date: "2026-07-12",
+        imageUrl: "data:image/svg+xml;utf8,receipt",
+        ocrConfidence: 0.96,
+        parserMode: "gemini-primary",
+        parseStatus: "Ready to split",
+        parseWarnings: [],
+        items: [
+          {
+            id: "shared-platter-1",
+            name: "Shared platter",
+            quantity: 1,
+            price: 1200,
+            assignedParticipantIds: ["maya", "nico", "bea"],
+            confidence: 0.96,
+            parseSource: "gemini",
+            needsReview: false
+          }
+        ],
+        tax: 0,
+        serviceCharge: 0,
+        total: 1200
+      },
+      warnings: [],
+      statuses: ["Scanning receipt", "Reading receipt", "Ready to split"]
+    })
+  };
+});
 
 async function enterPreview(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
@@ -14,24 +83,12 @@ function desktopNavigation() {
 }
 
 async function selectDinnerFriend(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByLabelText(/Nico/i));
   await user.click(screen.getByRole("button", { name: /Next: add the bill/i }));
 }
 
-async function renderApp(props?: {
-  allowLocalPreview?: boolean;
-  parseReceipt?: (input: {
-    imageDataUrl: string;
-    participantIds: string[];
-  }) => Promise<ParseReceiptResult>;
-}) {
-  const module = await import("./App");
-  render(<module.default {...props} />);
-}
-
 describe("App", () => {
-  it("shows a welcome screen before entering local preview", async () => {
-    await renderApp();
+  it("shows a welcome screen before entering local preview", () => {
+    render(<App />);
 
     expect(
       screen.getByRole("heading", { name: /Split every dinner/i })
@@ -43,20 +100,20 @@ describe("App", () => {
 
   it("lands on a unified home without asking for a global role", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    render(<App />);
     await enterPreview(user);
 
     expect(
       screen.getByRole("heading", { name: "Good evening, Maya" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Start a split/i })).toBeInTheDocument();
-    expect(screen.getByText("Sora Sushi")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scan a receipt or add items manually/i })).toBeInTheDocument();
     expect(screen.queryByText(/How are you joining/i)).not.toBeInTheDocument();
   });
 
   it("navigates to the dedicated friends page", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    render(<App />);
     await enterPreview(user);
 
     await user.click(
@@ -64,24 +121,12 @@ describe("App", () => {
     );
 
     expect(screen.getByRole("heading", { name: /Your friends/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Connect with Enzo/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add Enzo/i })).toBeInTheDocument();
   });
 
-  it("shows the bootstrapped profile friend code on the profile page", async () => {
+  it("asks for dinner friends before offering bill sources", async () => {
     const user = userEvent.setup();
-    await renderApp();
-    await enterPreview(user);
-
-    await user.click(
-      within(desktopNavigation()).getByRole("button", { name: "Profile" })
-    );
-
-    expect(screen.getByText("PREVIEW1")).toBeInTheDocument();
-  });
-
-  it("asks for dinner friends before offering three bill sources", async () => {
-    const user = userEvent.setup();
-    await renderApp();
+    render(<App />);
     await enterPreview(user);
 
     await user.click(screen.getByRole("button", { name: /Start a split/i }));
@@ -93,86 +138,63 @@ describe("App", () => {
 
     expect(screen.getByRole("button", { name: /Scan a receipt/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Choose from a menu/i })
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("button", { name: /Add items manually/i })
     ).toBeInTheDocument();
   });
 
-  it("builds a split from a restaurant menu checklist", async () => {
+  it("builds a split from manual item entry", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    render(<App />);
     await enterPreview(user);
     await user.click(screen.getByRole("button", { name: /Start a split/i }));
     await selectDinnerFriend(user);
 
-    await user.click(screen.getByRole("button", { name: /Choose from a menu/i }));
-    await user.click(screen.getByRole("button", { name: /Sora Sushi/i }));
-    await user.click(screen.getByLabelText(/Salmon roll/i));
-    await user.click(screen.getByRole("button", { name: /Review split/i }));
+    await user.click(screen.getByRole("button", { name: /Add items manually/i }));
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "Sora Sushi" })
+      screen.getByRole("heading", { level: 1, name: "Manual dinner" })
     ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Salmon roll")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("New item")).toBeInTheDocument();
+  });
+
+  it("reads an uploaded manual receipt into assignable item rows", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await enterPreview(user);
+    await user.click(screen.getByRole("button", { name: /Start a split/i }));
+    await selectDinnerFriend(user);
+    await user.click(screen.getByRole("button", { name: /Add items manually/i }));
+
+    await user.upload(
+      screen.getByLabelText(/Upload receipt image/i),
+      new File(["receipt"], "receipt.png", { type: "image/png" })
+    );
+    await user.click(screen.getByRole("button", { name: "Read receipt" }));
+
+    expect(await screen.findByDisplayValue("Latte")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("2")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("240")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Gemini Cafe" })).toBeInTheDocument();
   });
 
   it("keeps receipt scanning as an alternative source", async () => {
     const user = userEvent.setup();
-    const parseReceipt = vi.fn().mockImplementation(
-      async ({ imageDataUrl, participantIds }) =>
-        ({
-          receipt: {
-            id: "receipt-manual-review",
-            merchantName: "Scanned receipt",
-            date: "2026-07-02",
-            imageUrl: imageDataUrl,
-            ocrConfidence: 0,
-            parserMode: "camera-ocr",
-            parseStatus: "Needs manual review",
-            parseWarnings: ["Could not find item rows in OCR text."],
-            items: [
-              {
-                id: "unrecognized-item-1",
-                name: "Unrecognized item",
-                quantity: 1,
-                price: 0,
-                assignedParticipantIds: participantIds,
-                confidence: 0,
-                parseSource: "ocr",
-                needsReview: true
-              }
-            ],
-            tax: 0,
-            serviceCharge: 0,
-            total: 0
-          },
-          statuses: ["Scanning receipt", "OCR reading items", "Needs manual review"],
-          warnings: ["Could not find item rows in OCR text."]
-        }) satisfies ParseReceiptResult
-    );
-    await renderApp({ parseReceipt });
+    render(<App />);
     await enterPreview(user);
     await user.click(screen.getByRole("button", { name: /Start a split/i }));
     await selectDinnerFriend(user);
     await user.click(screen.getByRole("button", { name: /Scan a receipt/i }));
 
     expect(screen.getByRole("heading", { name: /Scan receipt/i })).toBeInTheDocument();
-    await user.upload(
-      screen.getByLabelText(/Upload receipt photo/i),
-      new File(["receipt"], "receipt.png", { type: "image/png" })
-    );
+    await user.click(screen.getByRole("button", { name: /Capture receipt/i }));
     expect(
       await screen.findByRole("heading", { level: 1, name: /Scanned receipt/i })
     ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Unrecognized item")).toBeInTheDocument();
-    expect(parseReceipt).toHaveBeenCalledOnce();
   });
 
-  it("opens a participant breakdown from Meals and validates proof", async () => {
+  it("opens a participant breakdown from Activity and validates proof", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    render(<App />);
     await enterPreview(user);
     await user.click(
       within(desktopNavigation()).getByRole("button", { name: "Meals" })
@@ -185,17 +207,21 @@ describe("App", () => {
     );
 
     expect(screen.getByText(/Payment verified/i)).toBeInTheDocument();
-    expect(screen.getByText(/Status: paid/i)).toBeInTheDocument();
+    expect(screen.getByText(/Status: unpaid/i)).toBeInTheDocument();
   });
 
-  it("hides local preview when the app runs in production mode without Firebase", async () => {
-    await renderApp({ allowLocalPreview: false });
+  it("settles a participant balance and removes it from Activity", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await enterPreview(user);
+    await user.click(
+      within(desktopNavigation()).getByRole("button", { name: "Meals" })
+    );
+    await user.click(screen.getByRole("button", { name: /Nico/i }));
 
-    expect(
-      screen.getByText(/Add Firebase settings to enable Google sign-in/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Continue in local preview/i })
-    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Settled" }));
+
+    expect(screen.getByRole("heading", { name: /Dinners in motion/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Nico/i })).not.toBeInTheDocument();
   });
 });

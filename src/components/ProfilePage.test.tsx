@@ -6,6 +6,7 @@ import { ProfilePage } from "./ProfilePage";
 const user = {
   id: "maya-user",
   displayName: "Maya",
+  firstName: "Maya",
   email: "maya@example.com",
   photoURL: null
 };
@@ -44,8 +45,8 @@ describe("ProfilePage", () => {
 
     expect(onEnableNotifications).toHaveBeenCalledOnce();
     expect(
-      await screen.findByRole("button", { name: "Enabled on this device" })
-    ).toBeDisabled();
+      await screen.findByRole("button", { name: "Sync this device" })
+    ).toBeEnabled();
   });
 
   it("does not pretend push is available in local preview", () => {

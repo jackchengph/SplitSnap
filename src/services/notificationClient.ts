@@ -2,6 +2,22 @@ import { getToken, onMessage, type MessagePayload } from "firebase/messaging";
 import { firebaseRuntime } from "../platform/firebase";
 import { saveDeviceToken } from "./cloudWorkspace";
 
+function friendlyMessagingError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    message.includes("messaging/token-subscribe-failed") ||
+    message.includes("Request is missing required authentication credential")
+  ) {
+    return new Error(
+      "Firebase push setup rejected this device. Check that Vercel is using the Web Push certificate key from Firebase Cloud Messaging settings, then reload and try again."
+    );
+  }
+
+  return error instanceof Error
+    ? error
+    : new Error("Notifications could not be enabled.");
+}
+
 export async function requestPushPermission(
   userId: string,
   vapidKey: string
@@ -21,10 +37,15 @@ export async function requestPushPermission(
   }
 
   const serviceWorkerRegistration = await navigator.serviceWorker.ready;
-  const token = await getToken(messaging, {
-    vapidKey,
-    serviceWorkerRegistration
-  });
+  let token = "";
+  try {
+    token = await getToken(messaging, {
+      vapidKey: vapidKey.trim(),
+      serviceWorkerRegistration
+    });
+  } catch (error) {
+    throw friendlyMessagingError(error);
+  }
   if (token) {
     await saveDeviceToken(userId, token);
   }

@@ -3,8 +3,7 @@ import type { Friend } from "../domain/types";
 interface GroupSetupProps {
   friends: Friend[];
   connectedFriendIds: string[];
-  selectedDinnerFriendIds: string[];
-  onToggleFriend: (friendId: string) => void;
+  onRemoveFriend: (friendId: string) => void;
   onNext: () => void;
   onHome: () => void;
 }
@@ -12,8 +11,7 @@ interface GroupSetupProps {
 export function GroupSetup({
   friends,
   connectedFriendIds,
-  selectedDinnerFriendIds,
-  onToggleFriend,
+  onRemoveFriend,
   onNext,
   onHome
 }: GroupSetupProps) {
@@ -35,18 +33,12 @@ export function GroupSetup({
       <section className="panel">
         <div className="section-heading">
           <p className="eyebrow">Dinner participants</p>
-          <h2>{selectedDinnerFriendIds.length} selected</h2>
+          <h2>{connectedFriends.length} added</h2>
         </div>
         <div className="friend-list selectable-list">
           {connectedFriends.map((friend) => {
-            const selected = selectedDinnerFriendIds.includes(friend.id);
             return (
-              <label className={selected ? "selectable-card selected" : "selectable-card"} key={friend.id}>
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  onChange={() => onToggleFriend(friend.id)}
-                />
+              <article className="selectable-card selected" key={friend.id}>
                 <span className="avatar" style={{ backgroundColor: `hsl(${friend.avatarHue} 62% 88%)` }}>
                   {friend.avatarLabel}
                 </span>
@@ -54,15 +46,25 @@ export function GroupSetup({
                   <strong>{friend.name}</strong>
                   <small>{friend.tags.join(", ")}</small>
                 </span>
-              </label>
+                <button
+                  type="button"
+                  className="secondary compact-button"
+                  onClick={() => onRemoveFriend(friend.id)}
+                >
+                  Remove
+                </button>
+              </article>
             );
           })}
+          {connectedFriends.length === 0 ? (
+            <p className="muted">No one is in this dinner yet. Go back to Friends and add people from Explore.</p>
+          ) : null}
         </div>
         <div className="button-row setup-actions">
           <button
             type="button"
             onClick={onNext}
-            disabled={selectedDinnerFriendIds.length === 0}
+            disabled={connectedFriends.length === 0}
           >
             Next: add the bill
           </button>

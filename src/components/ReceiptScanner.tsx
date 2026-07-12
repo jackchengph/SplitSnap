@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import type { ParseStatus } from "../domain/types";
-import { prepareReceiptFile } from "../services/receiptImageFile";
 
 interface ReceiptScannerProps {
   parseStatus: ParseStatus;
@@ -9,20 +8,23 @@ interface ReceiptScannerProps {
   onHome: () => void;
 }
 
+function fallbackReceiptImage(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960" viewBox="0 0 720 960"><rect width="720" height="960" fill="#f9faf7"/><rect x="124" y="96" width="472" height="768" rx="18" fill="#fff" stroke="#1f2933" stroke-width="6"/><text x="360" y="172" text-anchor="middle" font-family="Arial" font-size="38" font-weight="700">Scanned receipt</text><text x="180" y="260" font-family="Arial" font-size="30">Shared platter</text><text x="540" y="260" font-family="Arial" font-size="30" text-anchor="end">1200</text><text x="180" y="324" font-family="Arial" font-size="30">Main dish</text><text x="540" y="324" font-family="Arial" font-size="30" text-anchor="end">620</text><text x="180" y="388" font-family="Arial" font-size="30">Shared side</text><text x="540" y="388" font-family="Arial" font-size="30" text-anchor="end">720</text><text x="180" y="452" font-family="Arial" font-size="30">Drinks</text><text x="540" y="452" font-family="Arial" font-size="30" text-anchor="end">420</text><text x="180" y="516" font-family="Arial" font-size="30">Dessert</text><text x="540" y="516" font-family="Arial" font-size="30" text-anchor="end">1020</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }: ReceiptScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraMessage, setCameraMessage] = useState("Starting camera");
-  const [uploadError, setUploadError] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function startCamera() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraMessage("Camera is unavailable here. Upload a receipt photo instead.");
+        setCameraMessage("Camera is unavailable here. You can still use the capture button to test the parsing flow.");
         return;
       }
 
@@ -43,7 +45,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
         }
         setCameraMessage("Camera ready");
       } catch {
-        setCameraMessage("Camera permission was denied. Upload a receipt photo instead.");
+        setCameraMessage("Camera permission was denied. Use the capture button when you are ready to continue with a sample scan.");
       }
     }
 
@@ -55,31 +57,6 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
     };
   }, []);
 
-  async function submitImage(imageDataUrl: string) {
-    setUploadError("");
-    setIsProcessing(true);
-    try {
-      await onCapture(imageDataUrl);
-    } catch {
-      setUploadError("The scan could not finish. Try again with a clear, well-lit receipt photo.");
-    } finally {
-      setIsProcessing(false);
-    }
-  }
-
-  async function handleUpload(file: File) {
-    if (!file.type.startsWith("image/") && !/\.hei[cf]$/i.test(file.name)) {
-      setUploadError("Choose a receipt image file.");
-      return;
-    }
-    try {
-      const prepared = await prepareReceiptFile(file);
-      await submitImage(prepared.dataUrl);
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Receipt image could not be read.");
-    }
-  }
-
   function captureFrame() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -90,20 +67,19 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
       const context = canvas.getContext("2d");
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-        void submitImage(canvas.toDataURL("image/png"));
+        void onCapture(canvas.toDataURL("image/png"));
         return;
       }
     }
 
-    setUploadError("Camera is not ready. Upload a receipt photo instead.");
+    void onCapture(fallbackReceiptImage());
   }
 
   return (
     <main className="app-shell narrow-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Receipt scanner</p>
+          <p className="eyebrow">Camera + OCR</p>
           <h1>Scan receipt</h1>
         </div>
         <button type="button" className="secondary nav-button" onClick={onHome}>
@@ -126,28 +102,15 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
           <div>
             <strong>{cameraMessage}</strong>
             <p className="muted">
-              Align the whole receipt inside the highlighted frame, then capture. Uncertain rows stay editable.
+              Align the whole receipt inside the highlighted frame, then capture. Gemini reads the receipt first, and unresolved rows stay editable.
             </p>
           </div>
-          <button type="button" onClick={captureFrame} disabled={isProcessing}>
-            {isProcessing ? "Reading receipt..." : "Capture receipt"}
+          <button type="button" onClick={captureFrame}>
+            Capture receipt
           </button>
         </div>
-        <label className="upload-control">
-          Upload receipt photo
-          <input
-            type="file"
-            accept="image/*,.heic,.heif"
-            disabled={isProcessing}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleUpload(file);
-            }}
-          />
-        </label>
-        {uploadError ? <div className="notice warning" role="alert">{uploadError}</div> : null}
         <div className="parse-steps" aria-label="Receipt parse status">
-          {["Scanning receipt", "Reading receipt", "Scan failed", "Needs manual review", "Ready to split"].map(
+          {["Scanning receipt", "Reading receipt", "Scan failed", "OCR reading items", "Checking unclear areas", "Needs manual review", "Ready to split"].map(
             (status) => (
               <span className={parseStatus === status ? "tag active" : "tag"} key={status}>
                 {status}

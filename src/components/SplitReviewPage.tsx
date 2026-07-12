@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { formatCurrency } from "../domain/format";
 import type {
   DinnerGroup,
@@ -22,13 +21,17 @@ interface SplitReviewPageProps {
   split: SplitSummary;
   notifications: Notification[];
   paymentProofs: Record<string, PaymentProof>;
+  payerName: string;
   onHome: () => void;
-  onUpload: (imageDataUrl: string) => Promise<void> | void;
+  onSaveDinner: () => Promise<void>;
+  isReadingUploadedReceipt: boolean;
+  onUpload: (fileName: string, imageDataUrl: string) => void;
+  onReadReceipt: () => void;
   onToggleParticipant: (itemId: string, participantId: string) => void;
-  onSetParticipants: (itemId: string, participantIds: string[]) => void;
   onUpdatePrice: (itemId: string, price: number) => void;
   onUpdateName: (itemId: string, name: string) => void;
   onUpdateQuantity: (itemId: string, quantity: number) => void;
+  onAddItem: () => void;
   onReminder: (participantId: string) => void;
   onMarkPaid: (participantId: string) => void;
 }
@@ -40,20 +43,21 @@ export function SplitReviewPage({
   split,
   notifications,
   paymentProofs,
+  payerName,
   onHome,
+  onSaveDinner,
+  isReadingUploadedReceipt,
   onUpload,
+  onReadReceipt,
   onToggleParticipant,
-  onSetParticipants,
   onUpdatePrice,
   onUpdateName,
   onUpdateQuantity,
+  onAddItem,
   onReminder,
   onMarkPaid
 }: SplitReviewPageProps) {
-  const [reviewStep, setReviewStep] = useState<"assign" | "settle">("assign");
-  const [billPayerId, setBillPayerId] = useState(group.payerId);
-  const openBalanceCount = split.results.filter((result) => result.status !== "paid").length;
-  const isSettling = reviewStep === "settle";
+  const readyToSave = split.results.length > 0;
 
   return (
     <main className="review-page page-enter">
@@ -62,110 +66,53 @@ export function SplitReviewPage({
           <p className="eyebrow">Review the split</p>
           <h1>{receipt.merchantName}</h1>
           <p className="muted">
-            Assign the receipt first, then confirm how the bill gets paid back to you.
+            Check every item before sending anyone a balance.
           </p>
         </div>
         <div className="review-total">
-          <span>Bill you covered</span>
+          <span>Total</span>
           <strong>{formatCurrency(receipt.total)}</strong>
-          <button type="button" className="text-command" onClick={onHome}>
-            Save and return home
+          <button
+            type="button"
+            className="text-command"
+            disabled={!readyToSave}
+            onClick={() => {
+              void onSaveDinner().then(onHome);
+            }}
+          >
+            Save dinner
           </button>
         </div>
       </header>
 
-      <section className="review-next-actions" aria-label="Review actions">
-        <div>
-          <strong>{isSettling ? "Ready to save this split" : "Next: settle the bill"}</strong>
-          <span>
-            {isSettling
-              ? openBalanceCount === 0
-                ? "Everyone is marked paid."
-                : `${openBalanceCount} balance${openBalanceCount === 1 ? "" : "s"} still need payment.`
-              : "After assigning items, choose who paid and confirm who reimburses them."}
-          </span>
-        </div>
-        <div>
-          {!isSettling ? (
-            <button
-              type="button"
-              className="primary-command"
-              onClick={() => setReviewStep("settle")}
-            >
-              Continue to settle up
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setReviewStep("assign")}
-            >
-              Back to assignment
-            </button>
-          )}
-          <button type="button" className="primary-command" onClick={onHome}>
-            Save split
-          </button>
-        </div>
-      </section>
-
-      <section className="review-flow" aria-label="Split progress">
-        <button type="button" onClick={() => setReviewStep("assign")}>
-          <span>1</span>
-          <strong>Receipt</strong>
-          <small>{receipt.items.length} items captured</small>
-        </button>
-        <button
-          type="button"
-          className={!isSettling ? "active" : undefined}
-          onClick={() => setReviewStep("assign")}
-        >
-          <span>2</span>
-          <strong>Assign items</strong>
-          <small>Choose who shared each line</small>
-        </button>
-        <button
-          type="button"
-          className={isSettling ? "active" : undefined}
-          onClick={() => setReviewStep("settle")}
-        >
-          <span>3</span>
-          <strong>Settle up</strong>
-          <small>Choose payer and reimbursements</small>
-        </button>
-      </section>
-
       <div className="dashboard-grid">
         <div className="workflow-column">
-          {!isSettling ? (
-            <>
-              <ReceiptCapture receipt={receipt} onUpload={onUpload} />
-              <ItemAssignment
-                receipt={receipt}
-                friends={friends}
-                group={group}
-                onToggleParticipant={onToggleParticipant}
-                onSetParticipants={onSetParticipants}
-                onUpdatePrice={onUpdatePrice}
-                onUpdateName={onUpdateName}
-                onUpdateQuantity={onUpdateQuantity}
-              />
-            </>
-          ) : (
-            <SettlementPanel
-              friends={friends}
-              group={group}
-              receipt={receipt}
-              split={split}
-              billPayerId={billPayerId}
-              onBillPayerChange={setBillPayerId}
-              onReminder={onReminder}
-              onMarkPaid={onMarkPaid}
-            />
-          )}
+          <ReceiptCapture
+            receipt={receipt}
+            isReadingReceipt={isReadingUploadedReceipt}
+            onUpload={onUpload}
+            onReadReceipt={onReadReceipt}
+          />
+          <ItemAssignment
+            receipt={receipt}
+            friends={friends}
+            group={group}
+            onToggleParticipant={onToggleParticipant}
+            onUpdatePrice={onUpdatePrice}
+            onUpdateName={onUpdateName}
+            onUpdateQuantity={onUpdateQuantity}
+            onAddItem={onAddItem}
+          />
         </div>
         <aside className="summary-column">
           <GroupPanel friends={friends} group={group} />
+          <SettlementPanel
+            friends={friends}
+            split={split}
+            payerName={payerName}
+            onReminder={onReminder}
+            onMarkPaid={onMarkPaid}
+          />
           <PaymentProofStatus friends={friends} paymentProofs={paymentProofs} />
           <NotificationCenter friends={friends} notifications={notifications} />
         </aside>

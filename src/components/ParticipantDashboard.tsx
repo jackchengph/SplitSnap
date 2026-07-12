@@ -4,24 +4,27 @@ import type { Friend, PaymentProof, SplitResult } from "../domain/types";
 interface ParticipantDashboardProps {
   friends: Friend[];
   activeParticipantId: string;
+  payerId: string;
+  payerName: string;
   splitResult: SplitResult | undefined;
   paymentProof: PaymentProof | undefined;
-  onSelectParticipant: (participantId: string) => void;
   onSubmitProof: (participantId: string, fileName: string) => void;
+  onSettle: (participantId: string) => void;
   onBack: () => void;
 }
 
 export function ParticipantDashboard({
   friends,
   activeParticipantId,
+  payerId,
+  payerName,
   splitResult,
   paymentProof,
-  onSelectParticipant,
   onSubmitProof,
+  onSettle,
   onBack
 }: ParticipantDashboardProps) {
   const participant = friends.find((friend) => friend.id === activeParticipantId);
-  const nonPayerFriends = friends.filter((friend) => friend.id !== "maya");
 
   return (
     <main className="app-shell">
@@ -31,7 +34,7 @@ export function ParticipantDashboard({
           <h1>Your SplitSnap balance</h1>
         </div>
         <button type="button" className="secondary nav-button" onClick={onBack}>
-          Change role
+          Back to activity
         </button>
       </header>
 
@@ -41,23 +44,19 @@ export function ParticipantDashboard({
             <p className="eyebrow">You are</p>
             <h2>{participant?.name}</h2>
           </div>
-          <label className="select-label">
-            Choose demo friend
-            <select
-              value={activeParticipantId}
-              onChange={(event) => onSelectParticipant(event.target.value)}
-            >
-              {nonPayerFriends.map((friend) => (
-                <option key={friend.id} value={friend.id}>
-                  {friend.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <div className="amount-due-card">
-            <span>Amount owed to you</span>
+            <span>Amount owed to {payerName}</span>
             <strong>{formatCurrency(splitResult?.totalOwed ?? 0)}</strong>
             <p>Status: {splitResult?.status ?? "paid"}</p>
+            {splitResult ? (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onSettle(activeParticipantId)}
+              >
+                Settled
+              </button>
+            ) : null}
           </div>
         </section>
 
@@ -82,12 +81,6 @@ export function ParticipantDashboard({
                 <span>Service share</span>
                 <strong>{formatCurrency(splitResult.serviceShare)}</strong>
               </li>
-              {(splitResult.discountShare ?? 0) > 0 ? (
-                <li>
-                  <span>Discount share</span>
-                  <strong>-{formatCurrency(splitResult.discountShare ?? 0)}</strong>
-                </li>
-              ) : null}
             </ul>
           ) : (
             <p className="muted">No unpaid balance for this participant.</p>

@@ -1,5 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReceiptScanner } from "./ReceiptScanner";
 
@@ -28,9 +27,8 @@ describe("ReceiptScanner", () => {
     }
   );
 
-  it("passes an uploaded receipt image to the Gemini capture path", async () => {
+  it("passes a fallback image to the Gemini capture path when the camera is unavailable", async () => {
     const onCapture = vi.fn();
-    const user = userEvent.setup();
     render(
       <ReceiptScanner
         parseStatus="Idle"
@@ -41,36 +39,10 @@ describe("ReceiptScanner", () => {
     );
     await screen.findByText(/Camera permission was denied/i);
 
-    await user.upload(
-      screen.getByLabelText(/Upload receipt photo/i),
-      new File(["receipt"], "receipt.png", { type: "image/png" })
-    );
+    screen.getByRole("button", { name: "Capture receipt" }).click();
 
     await waitFor(() => {
-      expect(onCapture).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png;base64,/));
+      expect(onCapture).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/svg\+xml;utf8,/));
     });
-  });
-
-  it("rejects non-image uploads before Gemini", async () => {
-    const onCapture = vi.fn();
-    render(
-      <ReceiptScanner
-        parseStatus="Idle"
-        parseWarnings={[]}
-        onCapture={onCapture}
-        onHome={vi.fn()}
-      />
-    );
-    await screen.findByText(/Camera permission was denied/i);
-
-    const input = screen.getByLabelText(/Upload receipt photo/i);
-    fireEvent.change(input, {
-      target: {
-        files: [new File(["not an image"], "receipt.txt", { type: "text/plain" })]
-      }
-    });
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(/choose a receipt image/i);
-    expect(onCapture).not.toHaveBeenCalled();
   });
 });

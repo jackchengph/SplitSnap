@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SessionProvider, useSession } from "./app/SessionProvider";
 import { useSplitSnapState } from "./app/useSplitSnapState";
 import { ActivityPage } from "./components/ActivityPage";
@@ -10,69 +10,89 @@ import { HomeDashboard } from "./components/HomeDashboard";
 import { ParticipantDashboard } from "./components/ParticipantDashboard";
 import { ProfilePage } from "./components/ProfilePage";
 import { ReceiptScanner } from "./components/ReceiptScanner";
-import { RestaurantMenu } from "./components/RestaurantMenu";
-import { RestaurantSearch } from "./components/RestaurantSearch";
 import { SignInScreen } from "./components/SignInScreen";
 import { SplitReviewPage } from "./components/SplitReviewPage";
-import {
-  getSeedMenu,
-  getSeedRestaurant
-} from "./domain/restaurantCatalog";
-import type {
-  CaptureInput,
-  ParseReceiptResult
-} from "./domain/receiptParsingService";
-import { seedRestaurants } from "./domain/restaurantData";
-import type { Restaurant } from "./domain/restaurantTypes";
 import { firebaseRuntime } from "./platform/firebase";
-import { requestPushPermission } from "./services/notificationClient";
+import {
+  observeForegroundMessages,
+  requestPushPermission
+} from "./services/notificationClient";
+import type { SessionUser } from "./services/authService";
+import type { UserProfile } from "./domain/accountTypes";
 
 type FlowStep =
   | "none"
   | "group"
   | "source"
-  | "restaurant"
-  | "menu"
   | "scanner"
   | "review"
   | "participant";
 
-type ReceiptParser = (input: CaptureInput) => Promise<ParseReceiptResult>;
+interface AuthenticatedSplitSnapAppProps {
+  user: SessionUser;
+  profile: UserProfile;
+  sessionMode: "local" | "cloud";
+  onSignOut: () => void;
+}
 
-export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser }) {
-  const session = useSession();
-  const state = useSplitSnapState({ parseReceipt });
+function AuthenticatedSplitSnapApp({
+  user,
+  profile,
+  sessionMode,
+  onSignOut
+}: AuthenticatedSplitSnapAppProps) {
+  const state = useSplitSnapState({
+    currentUser: user,
+    cloudMode: sessionMode === "cloud"
+  });
   const [currentPage, setCurrentPage] = useState<AppPage>("home");
   const [flowStep, setFlowStep] = useState<FlowStep>("none");
-  const [selectedRestaurant, setSelectedRestaurant] =
-    useState<Restaurant | null>(null);
-  const [restaurantNeedsGroup, setRestaurantNeedsGroup] = useState(false);
   const activeSplit = state.split.results.find(
     (result) => result.participantId === state.activeParticipantId
   );
+  const activePayerName =
+    state.friends.find((friend) => friend.id === state.group.payerId)?.name ||
+    user.firstName;
 
-  if (
-    session.status === "loading" ||
-    (session.status === "authenticated" && session.profileStatus === "loading")
-  ) {
-    return <main className="loading-shell">Opening SplitSnap...</main>;
-  }
+  useEffect(() => {
+    if (sessionMode !== "cloud") {
+      return;
+    }
 
-  if (session.status === "signed-out" || session.profileStatus === "error") {
-    return (
-      <SignInScreen
-        error={session.error}
-        mode={session.mode}
-        onSignIn={() => void session.signIn()}
-        onLocalPreview={session.enterLocalPreview}
-        onRetryProfile={
-          session.profileStatus === "error"
-            ? () => void session.retryProfile()
-            : undefined
-        }
-      />
-    );
-  }
+    let unsubscribe = () => {};
+    void observeForegroundMessages((payload) => {
+      const title = payload.data?.title || payload.notification?.title;
+      if (!title || !("Notification" in window) || Notification.permission !== "granted") {
+        return;
+      }
+
+      new Notification(title, {
+        body: payload.data?.body || payload.notification?.body,
+        icon: "/icons/icon-192.png"
+      });
+    }).then((nextUnsubscribe) => {
+      unsubscribe = nextUnsubscribe;
+    });
+
+    return () => unsubscribe();
+  }, [sessionMode]);
+
+  useEffect(() => {
+    if (
+      sessionMode !== "cloud" ||
+      !("Notification" in window) ||
+      Notification.permission !== "granted"
+    ) {
+      return;
+    }
+
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKey) {
+      return;
+    }
+
+    void requestPushPermission(user.id, vapidKey).catch(() => undefined);
+  }, [sessionMode, user.id]);
 
   function goHome() {
     setFlowStep("none");
@@ -91,14 +111,8 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
       <GroupSetup
         friends={state.friends}
         connectedFriendIds={state.connectedFriendIds}
-        selectedDinnerFriendIds={state.selectedDinnerFriendIds}
-        onToggleFriend={state.toggleDinnerFriend}
+        onRemoveFriend={state.disconnectFriend}
         onNext={() => {
-          if (selectedRestaurant && restaurantNeedsGroup) {
-            setRestaurantNeedsGroup(false);
-            setFlowStep("menu");
-            return;
-          }
           setFlowStep("source");
         }}
         onHome={goHome}
@@ -108,42 +122,8 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
     content = (
       <CreateSplitFlow
         onReceipt={() => setFlowStep("scanner")}
-        onRestaurant={() => {
-          setRestaurantNeedsGroup(false);
-          setFlowStep("restaurant");
-        }}
         onManual={() => {
           state.useManualReceipt();
-          setFlowStep("review");
-        }}
-      />
-    );
-  } else if (flowStep === "restaurant") {
-    content = (
-      <RestaurantSearch
-        restaurants={seedRestaurants}
-        onBack={() => setFlowStep("source")}
-        onSelect={(restaurant) => {
-          setSelectedRestaurant(restaurant);
-          setFlowStep(restaurantNeedsGroup ? "group" : "menu");
-        }}
-      />
-    );
-  } else if (flowStep === "menu" && selectedRestaurant) {
-    content = (
-      <RestaurantMenu
-        restaurant={selectedRestaurant}
-        categories={getSeedMenu(selectedRestaurant.id)}
-        selections={[]}
-        onBack={() => setFlowStep("restaurant")}
-        onToggle={() => undefined}
-        onQuantityChange={() => undefined}
-        onContinue={(selections) => {
-          state.useRestaurantMenu(
-            selectedRestaurant,
-            getSeedMenu(selectedRestaurant.id),
-            selections
-          );
           setFlowStep("review");
         }}
       />
@@ -169,13 +149,17 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
         split={state.split}
         notifications={state.notifications}
         paymentProofs={state.paymentProofs}
+        payerName={activePayerName}
         onHome={goHome}
-        onUpload={state.uploadReceipt}
+        onSaveDinner={state.saveDinner}
+        isReadingUploadedReceipt={state.isReadingUploadedReceipt}
+        onUpload={state.simulateUpload}
+        onReadReceipt={state.readUploadedReceipt}
         onToggleParticipant={state.toggleItemParticipant}
-        onSetParticipants={state.setItemParticipants}
         onUpdatePrice={state.updateItemPrice}
         onUpdateName={state.updateItemName}
         onUpdateQuantity={state.updateItemQuantity}
+        onAddItem={state.addManualItem}
         onReminder={state.sendReminder}
         onMarkPaid={state.markPaid}
       />
@@ -185,10 +169,16 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
       <ParticipantDashboard
         friends={state.friends}
         activeParticipantId={state.activeParticipantId}
+        payerId={state.group.payerId}
+        payerName={activePayerName}
         splitResult={activeSplit}
         paymentProof={state.paymentProofs[state.activeParticipantId]}
-        onSelectParticipant={state.setActiveParticipantId}
         onSubmitProof={state.submitPaymentProof}
+        onSettle={(participantId) => {
+          state.markPaid(participantId);
+          setFlowStep("none");
+          setCurrentPage("activity");
+        }}
         onBack={() => {
           setFlowStep("none");
           setCurrentPage("activity");
@@ -200,7 +190,9 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
       <FriendsExplorer
         friends={state.friends}
         connectedFriendIds={state.connectedFriendIds}
+        currentUserId={user.id}
         onConnect={state.connectFriend}
+        onRemove={state.disconnectFriend}
         onNext={() => setFlowStep("group")}
         onHome={goHome}
       />
@@ -209,34 +201,39 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
     content = (
       <ActivityPage
         friends={state.friends}
-        group={state.group}
-        receipt={state.receipt}
         split={state.split}
+        cloudExpenses={state.cloudExpenses}
+        currentUserId={user.id}
         onOpenParticipant={(participantId) => {
           state.setActiveParticipantId(participantId);
           setFlowStep("participant");
         }}
+        onOpenExpense={(expenseId, participantId) => {
+          const expense = state.cloudExpenses.find((item) => item.id === expenseId);
+          const opensAsPayer = expense?.payerId === user.id;
+          state.openCloudExpense(expenseId, participantId);
+          setFlowStep(opensAsPayer ? "review" : "participant");
+        }}
       />
     );
   } else if (currentPage === "profile") {
-    const authenticatedMode = session.mode === "local" ? "local" : "cloud";
     content = (
       <ProfilePage
-        user={session.user!}
-        profile={session.profile!}
-        mode={authenticatedMode}
+        user={user}
+        profile={profile}
+        mode={sessionMode}
         notificationReady={
-          session.mode === "cloud" &&
+          sessionMode === "cloud" &&
           Boolean(import.meta.env.VITE_FIREBASE_VAPID_KEY)
         }
         onEnableNotifications={async () => {
           const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-          if (!session.user || !vapidKey) {
+          if (!vapidKey) {
             throw new Error("Firebase push settings are incomplete.");
           }
-          return requestPushPermission(session.user.id, vapidKey);
+          return requestPushPermission(user.id, vapidKey);
         }}
-        onSignOut={() => void session.signOut()}
+        onSignOut={onSignOut}
       />
     );
   } else {
@@ -244,18 +241,10 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
       <HomeDashboard
         friends={state.friends}
         split={state.split}
-        restaurants={seedRestaurants}
-        userName={session.user?.displayName ?? "there"}
+        cloudExpenses={state.cloudExpenses}
+        userName={user.firstName}
+        currentUserId={user.id}
         onStartSplit={() => setFlowStep("group")}
-        onOpenRestaurants={() => {
-          setRestaurantNeedsGroup(true);
-          setFlowStep("restaurant");
-        }}
-        onSelectRestaurant={(restaurant) => {
-          setSelectedRestaurant(restaurant);
-          setRestaurantNeedsGroup(true);
-          setFlowStep("group");
-        }}
       />
     );
   }
@@ -263,8 +252,8 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
   return (
     <AppShell
       currentPage={currentPage}
-      userName={session.user?.displayName ?? "SplitSnap user"}
-      sessionMode={session.mode === "local" ? "local" : "cloud"}
+      userName={user.firstName}
+      sessionMode={sessionMode}
       onNavigate={navigate}
     >
       {content}
@@ -272,22 +261,66 @@ export function SplitSnapApp({ parseReceipt }: { parseReceipt?: ReceiptParser })
   );
 }
 
+export function SplitSnapApp() {
+  const session = useSession();
+
+  if (session.status === "loading") {
+    return <main className="loading-shell">Opening SplitSnap...</main>;
+  }
+
+  if (session.status === "signed-out" || !session.user) {
+    return (
+      <SignInScreen
+        error={session.error}
+        localPreview={session.mode === "local"}
+        onSignIn={() => void session.signIn()}
+        onEmailSignIn={(email, password) =>
+          void session.signInWithEmail(email, password)
+        }
+        onEmailCreate={(email, password) =>
+          void session.createEmailAccount(email, password)
+        }
+        onLocalPreview={session.enterLocalPreview}
+      />
+    );
+  }
+
+  if (!session.profile || session.profileStatus !== "ready") {
+    return <main className="loading-shell">Opening SplitSnap...</main>;
+  }
+
+  const sessionMode = session.mode === "cloud" ? "cloud" : "local";
+
+  return (
+    <AuthenticatedSplitSnapApp
+      user={session.user}
+      profile={session.profile}
+      sessionMode={sessionMode}
+      onSignOut={() => void session.signOut()}
+    />
+  );
+}
+
 interface AppProps {
+  cloudConfigured?: boolean;
   allowLocalPreview?: boolean;
-  parseReceipt?: ReceiptParser;
+  autoEnterLocalPreview?: boolean;
 }
 
 export default function App({
-  allowLocalPreview = import.meta.env.DEV || !firebaseRuntime.configured,
-  parseReceipt
-}: AppProps) {
+  cloudConfigured = import.meta.env.MODE === "test"
+    ? false
+    : firebaseRuntime.configured,
+  allowLocalPreview = import.meta.env.DEV || !cloudConfigured,
+  autoEnterLocalPreview = import.meta.env.PROD && !cloudConfigured
+}: AppProps = {}) {
   return (
     <SessionProvider
-      cloudConfigured={firebaseRuntime.configured}
+      cloudConfigured={cloudConfigured}
       allowLocalPreview={allowLocalPreview}
-      autoEnterLocalPreview={import.meta.env.PROD && !firebaseRuntime.configured}
+      autoEnterLocalPreview={autoEnterLocalPreview}
     >
-      <SplitSnapApp parseReceipt={parseReceipt} />
+      <SplitSnapApp />
     </SessionProvider>
   );
 }

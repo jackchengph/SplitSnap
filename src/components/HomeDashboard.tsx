@@ -1,32 +1,56 @@
 import { formatCurrency } from "../domain/format";
-import type { Restaurant } from "../domain/restaurantTypes";
-import type { Friend, SplitSummary } from "../domain/types";
+import { calculateSplit } from "../domain/splitCalculator";
+import type { CloudExpenseDocument } from "../services/cloudWorkspace";
+import type { DinnerGroup, Friend, SplitSummary } from "../domain/types";
 
 interface HomeDashboardProps {
   friends: Friend[];
   split: SplitSummary;
-  restaurants: Restaurant[];
+  cloudExpenses?: CloudExpenseDocument[];
   userName: string;
+  currentUserId: string;
   onStartSplit: () => void;
-  onOpenRestaurants: () => void;
-  onSelectRestaurant: (restaurant: Restaurant) => void;
 }
 
 export function HomeDashboard({
   friends,
   split,
-  restaurants,
+  cloudExpenses = [],
   userName,
-  onStartSplit,
-  onOpenRestaurants,
-  onSelectRestaurant
+  currentUserId,
+  onStartSplit
 }: HomeDashboardProps) {
-  const owedToYou = split.results
+  const cloudRows = cloudExpenses.map((expense) => {
+    const group: DinnerGroup = {
+      id: expense.id,
+      name: expense.name,
+      payerId: expense.payerId,
+      participantIds: expense.participantIds
+    };
+    return {
+      expense,
+      summary: calculateSplit(expense.receipt, group, expense.statuses)
+    };
+  });
+  const cloudOwedByYou = cloudRows
+    .filter(({ expense }) => expense.payerId !== currentUserId)
+    .flatMap(({ summary }) =>
+      summary.results.filter((result) => result.participantId === currentUserId)
+    );
+  const cloudOwedToYou = cloudRows
+    .filter(({ expense }) => expense.payerId === currentUserId)
+    .flatMap(({ summary }) => summary.results);
+  const localOwedToYou = split.results
     .filter((result) => result.status !== "paid")
-    .reduce((total, result) => total + result.totalOwed, 0);
-  const unsettledCount = split.results.filter(
-    (result) => result.status !== "paid"
-  ).length;
+  const owedByYou = cloudOwedByYou.reduce((total, result) => total + result.totalOwed, 0);
+  const owedToYou = (cloudExpenses.length > 0 ? cloudOwedToYou : localOwedToYou).reduce(
+    (total, result) => total + result.totalOwed,
+    0
+  );
+  const unsettledCount =
+    cloudExpenses.length > 0
+      ? cloudOwedByYou.length + cloudOwedToYou.length
+      : localOwedToYou.length;
   const today = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     month: "long",
@@ -49,7 +73,7 @@ export function HomeDashboard({
       <section className="balance-strip" aria-label="Balance summary">
         <div>
           <span>You owe</span>
-          <strong>{formatCurrency(0)}</strong>
+          <strong>{formatCurrency(owedByYou)}</strong>
         </div>
         <div>
           <span>Owed to you</span>
@@ -65,32 +89,16 @@ export function HomeDashboard({
         <div className="section-title-row">
           <div>
             <p className="eyebrow">Plan the split</p>
-            <h2>Find the restaurant</h2>
+            <h2>Start from the bill</h2>
           </div>
         </div>
         <button
           type="button"
           className="restaurant-search-trigger"
-          onClick={onOpenRestaurants}
+          onClick={onStartSplit}
         >
-          Search restaurants, cuisines, or neighborhoods
+          Scan a receipt or add items manually
         </button>
-        <div className="home-restaurant-grid">
-          {restaurants.map((restaurant) => (
-            <button
-              type="button"
-              key={restaurant.id}
-              className="home-restaurant-card"
-              onClick={() => onSelectRestaurant(restaurant)}
-            >
-              <img src={restaurant.imageUrl} alt="" />
-              <span>
-                <strong>{restaurant.name}</strong>
-                <small>{restaurant.cuisine}</small>
-              </span>
-            </button>
-          ))}
-        </div>
       </section>
 
       <section className="home-section">
@@ -99,11 +107,13 @@ export function HomeDashboard({
             <p className="eyebrow">Your circle</p>
             <h2>Ready for the next dinner</h2>
           </div>
-          <span className="quiet-count">{friends.length - 1} friends</span>
+          <span className="quiet-count">
+            {friends.filter((friend) => friend.id !== currentUserId).length} friends
+          </span>
         </div>
         <div className="home-friend-row">
           {friends
-            .filter((friend) => friend.id !== "maya")
+            .filter((friend) => friend.id !== currentUserId)
             .slice(0, 4)
             .map((friend) => (
               <div key={friend.id} className="home-friend">

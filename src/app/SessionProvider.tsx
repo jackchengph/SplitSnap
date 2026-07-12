@@ -26,6 +26,8 @@ interface SessionContextValue {
   profileStatus: ProfileStatus;
   error: string;
   signIn: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  createEmailAccount: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   retryProfile: () => Promise<void>;
   enterLocalPreview: () => void;
@@ -42,6 +44,7 @@ interface SessionProviderProps {
 const localUser: SessionUser = {
   id: "local-user",
   displayName: "Maya",
+  firstName: "Maya",
   email: "",
   photoURL: null
 };
@@ -167,6 +170,26 @@ export function SessionProvider({
         } catch (caught) {
           setError(
             caught instanceof Error ? caught.message : "Google sign-in failed."
+          );
+        }
+      },
+      signInWithEmail: async (email, password) => {
+        setError("");
+        try {
+          await authAdapter.signInWithEmail(email, password);
+        } catch (caught) {
+          setError(
+            caught instanceof Error ? caught.message : "Email sign-in failed."
+          );
+        }
+      },
+      createEmailAccount: async (email, password) => {
+        setError("");
+        try {
+          await authAdapter.createEmailAccount(email, password);
+        } catch (caught) {
+          setError(
+            caught instanceof Error ? caught.message : "Account creation failed."
           );
         }
       },

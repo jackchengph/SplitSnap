@@ -1,14 +1,12 @@
-import { Camera, ChevronRight, ListPlus, Utensils } from "lucide-react";
+import { Camera, ChevronRight, ListPlus } from "lucide-react";
 
 interface CreateSplitFlowProps {
   onReceipt: () => void;
-  onRestaurant: () => void;
   onManual: () => void;
 }
 
 export function CreateSplitFlow({
   onReceipt,
-  onRestaurant,
   onManual
 }: CreateSplitFlowProps) {
   const options = [
@@ -17,12 +15,6 @@ export function CreateSplitFlow({
       description: "Use the camera and OCR fallback.",
       icon: Camera,
       action: onReceipt
-    },
-    {
-      title: "Choose from a menu",
-      description: "Find the restaurant and check what was ordered.",
-      icon: Utensils,
-      action: onRestaurant
     },
     {
       title: "Add items manually",

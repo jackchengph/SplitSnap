@@ -14,14 +14,14 @@ describe("ItemAssignment", () => {
         friends={mockFriends}
         group={demoGroup}
         onToggleParticipant={vi.fn()}
-        onSetParticipants={vi.fn()}
         onUpdatePrice={vi.fn()}
         onUpdateName={vi.fn()}
         onUpdateQuantity={vi.fn()}
+        onAddItem={vi.fn()}
       />
     );
 
-    expect(screen.getByText("Scanned")).toBeInTheDocument();
+    expect(screen.getByText("OCR")).toBeInTheDocument();
     expect(screen.queryByText("Gemini")).not.toBeInTheDocument();
   });
 
@@ -33,10 +33,10 @@ describe("ItemAssignment", () => {
         friends={mockFriends}
         group={demoGroup}
         onToggleParticipant={vi.fn()}
-        onSetParticipants={vi.fn()}
         onUpdatePrice={vi.fn()}
         onUpdateName={vi.fn()}
         onUpdateQuantity={onUpdateQuantity}
+        onAddItem={vi.fn()}
       />
     );
 

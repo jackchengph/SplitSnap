@@ -108,7 +108,7 @@ export function calculateSplit(
         status: statuses[participantId] ?? "unpaid"
       };
     })
-    .filter((result) => result.totalOwed > 0 || result.status !== "paid");
+    .filter((result) => result.status !== "paid" && result.totalOwed > 0);
 
   const displayedTotal = roundMoney(sum(results.map((result) => result.totalOwed)));
   const targetNonPayerTotal = roundMoney(

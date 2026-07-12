@@ -1,45 +1,15 @@
 import {
-  applicationDefault,
-  cert,
-  getApps,
-  initializeApp
-} from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
-import { getMessaging } from "firebase-admin/messaging";
-import {
-  canSendSupabaseReminder,
-  listSupabaseDeviceTokens
-} from "../_lib/supabaseNotifications.js";
-import { createSupabaseServiceClient } from "../_lib/supabaseServer.js";
+  requireUserId,
+  type ApiRequest,
+  type ApiResponse
+} from "../_lib/authenticatedRequest.js";
+import { sendPushToUser } from "../_lib/push.js";
 
-interface ApiRequest {
-  method?: string;
-  headers: Record<string, string | string[] | undefined>;
-  body?: {
-    expenseId?: string;
-    participantId?: string;
-    title?: string;
-    body?: string;
-  };
-}
-
-interface ApiResponse {
-  status: (code: number) => ApiResponse;
-  json: (value: unknown) => void;
-}
-
-function ensureAdminApp() {
-  if (getApps().length > 0) {
-    return;
-  }
-
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  initializeApp({
-    credential: serviceAccount
-      ? cert(JSON.parse(serviceAccount))
-      : applicationDefault()
-  });
+interface ReminderBody {
+  expenseId?: unknown;
+  participantId?: unknown;
+  title?: unknown;
+  body?: unknown;
 }
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
@@ -49,74 +19,33 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   }
 
   try {
-    ensureAdminApp();
-    const authorization = request.headers.authorization;
-    const header = Array.isArray(authorization) ? authorization[0] : authorization;
-    const idToken = header?.startsWith("Bearer ") ? header.slice(7) : "";
-    if (!idToken) {
-      response.status(401).json({ error: "Authentication required." });
-      return;
-    }
-
-    const caller = await getAuth().verifyIdToken(idToken);
-    const { expenseId, participantId, title, body } = request.body || {};
+    const callerId = await requireUserId(request);
+    const { expenseId, participantId, title, body } = (request.body || {}) as ReminderBody;
     if (!expenseId || !participantId || !title || !body) {
       response.status(400).json({ error: "Missing reminder fields." });
       return;
     }
 
-    const supabase = createSupabaseServiceClient();
-    let tokens: string[] = [];
-    if (supabase) {
-      const allowed = await canSendSupabaseReminder(supabase as never, {
-        expenseId,
-        callerId: caller.uid,
-        participantId
-      });
-      if (!allowed) {
-        response.status(403).json({ error: "Not allowed to send this reminder." });
-        return;
-      }
-      tokens = await listSupabaseDeviceTokens(supabase as never, participantId);
-    } else {
-      const firestore = getFirestore();
-      const expense = await firestore.collection("expenses").doc(expenseId).get();
-      const data = expense.data();
-      if (
-        !data ||
-        data.payerId !== caller.uid ||
-        !Array.isArray(data.participantIds) ||
-        !data.participantIds.includes(participantId) ||
-        participantId === caller.uid
-      ) {
-        response.status(403).json({ error: "Not allowed to send this reminder." });
-        return;
-      }
-
-      const devices = await firestore
-        .collection("users")
-        .doc(participantId)
-        .collection("devices")
-        .where("enabled", "==", true)
-        .get();
-      tokens = devices.docs
-        .map((device) => device.data().token)
-        .filter((token): token is string => typeof token === "string");
+    if (participantId === callerId) {
+      response.status(403).json({ error: "Not allowed to send this reminder." });
+      return;
     }
 
-    if (tokens.length === 0) {
+    const result = await sendPushToUser({
+      userId: String(participantId),
+      expenseId: String(expenseId),
+      title: String(title),
+      body: String(body),
+      link: "/?page=activity"
+    });
+    if (result.sent === 0) {
       response.status(409).json({ error: "This friend has no push-enabled device." });
       return;
     }
 
-    const result = await getMessaging().sendEachForMulticast({
-      tokens,
-      webpush: { fcmOptions: { link: "/" } },
-      data: { expenseId, title, body }
-    });
     response.status(200).json({
-      sent: result.successCount,
-      failed: result.failureCount
+      sent: result.sent,
+      failed: result.failed
     });
   } catch (error) {
     response.status(500).json({

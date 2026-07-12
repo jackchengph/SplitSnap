@@ -1,12 +1,10 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { seedRestaurants } from "../domain/restaurantData";
 import { RestaurantSearch } from "./RestaurantSearch";
 
 describe("RestaurantSearch", () => {
   it("filters restaurants as the user types", async () => {
-    const user = userEvent.setup();
     render(
       <RestaurantSearch
         restaurants={seedRestaurants}
@@ -15,7 +13,9 @@ describe("RestaurantSearch", () => {
       />
     );
 
-    await user.type(screen.getByRole("searchbox"), "sushi");
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "sushi" }
+    });
 
     expect(screen.getByText("Sora Sushi")).toBeInTheDocument();
     expect(screen.queryByText("Verde Kitchen")).not.toBeInTheDocument();

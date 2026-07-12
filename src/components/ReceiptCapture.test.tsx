@@ -8,7 +8,13 @@ describe("ReceiptCapture", () => {
   it("reads uploaded image bytes as a data URL", async () => {
     const user = userEvent.setup();
     const onUpload = vi.fn().mockResolvedValue(undefined);
-    render(<ReceiptCapture receipt={demoReceipt} onUpload={onUpload} />);
+    render(
+      <ReceiptCapture
+        receipt={demoReceipt}
+        onUpload={onUpload}
+        onReadReceipt={vi.fn()}
+      />
+    );
 
     await user.upload(
       screen.getByLabelText(/Upload receipt image/i),
@@ -17,23 +23,23 @@ describe("ReceiptCapture", () => {
 
     await waitFor(() => {
       expect(onUpload).toHaveBeenCalledWith(
+        "receipt.png",
         "data:image/png;base64,cmVjZWlwdC1ieXRlcw=="
       );
     });
   });
 
-  it("rejects files that are not images before reading them", () => {
-    const onUpload = vi.fn();
-    render(<ReceiptCapture receipt={demoReceipt} onUpload={onUpload} />);
-    const input = screen.getByLabelText(/Upload receipt image/i);
+  it("calls the receipt reader when an uploaded receipt is available", () => {
+    const onReadReceipt = vi.fn();
+    render(
+      <ReceiptCapture
+        receipt={{ ...demoReceipt, imageUrl: "data:image/png;base64,abc" }}
+        onUpload={vi.fn()}
+        onReadReceipt={onReadReceipt}
+      />
+    );
 
-    fireEvent.change(input, {
-      target: {
-        files: [new File(["not-an-image"], "receipt.txt", { type: "text/plain" })]
-      }
-    });
-
-    expect(screen.getByRole("alert")).toHaveTextContent(/choose an image file/i);
-    expect(onUpload).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Read receipt" }));
+    expect(onReadReceipt).toHaveBeenCalledOnce();
   });
 });

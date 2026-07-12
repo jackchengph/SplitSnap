@@ -1,24 +1,11 @@
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  setDoc,
-  where,
-  type Firestore
-} from "firebase/firestore";
 import type {
   DinnerGroup,
+  PaymentProof,
   PaymentStatus,
   Receipt
 } from "../domain/types";
 import { firebaseRuntime } from "../platform/firebase";
-import { supabaseRuntime } from "../platform/supabase";
-import {
-  buildSupabaseExpenseRows,
-  saveSupabaseDeviceToken,
-  saveSupabaseExpense
-} from "./supabaseWorkspace";
+import type { SessionUser } from "./authService";
 
 export interface CloudExpenseDocument {
   id: string;
@@ -27,8 +14,25 @@ export interface CloudExpenseDocument {
   name: string;
   receipt: Receipt;
   statuses: Record<string, PaymentStatus>;
+  paymentProofs?: Record<string, PaymentProof>;
+  notifiedParticipantIds?: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PublicUserProfile {
+  id: string;
+  displayName: string;
+  firstName: string;
+  photoURL: string | null;
+  handle: string;
+  friendCode?: string;
+  updatedAt?: string;
+}
+
+export interface PublicUsersSnapshot {
+  profiles: PublicUserProfile[];
+  connectedFriendIds: string[];
 }
 
 interface BuildCloudExpenseInput {
@@ -37,15 +41,77 @@ interface BuildCloudExpenseInput {
   group: DinnerGroup;
   receipt: Receipt;
   statuses: Record<string, PaymentStatus>;
+  paymentProofs?: Record<string, PaymentProof>;
   updatedAt: string;
   createdAt?: string;
 }
 
-function requireFirestore(): Firestore {
-  if (!firebaseRuntime.firestore) {
-    throw new Error("Cloud Firestore is not configured.");
+async function requireFirebaseToken(): Promise<string> {
+  const token = await firebaseRuntime.auth?.currentUser?.getIdToken();
+  if (!token) {
+    throw new Error("Sign in before using cloud features.");
   }
-  return firebaseRuntime.firestore;
+  return token;
+}
+
+async function cloudFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = await requireFirebaseToken();
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+  const result = (await response.json().catch(() => null)) as
+    | { error?: string }
+    | T
+    | null;
+  if (!response.ok) {
+    const errorMessage =
+      result &&
+      typeof result === "object" &&
+      "error" in result &&
+      typeof result.error === "string"
+        ? result.error
+        : "";
+    throw new Error(
+      errorMessage || "Cloud request failed."
+    );
+  }
+  return result as T;
+}
+
+async function publicCloudFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+  const result = (await response.json().catch(() => null)) as
+    | { error?: string }
+    | T
+    | null;
+  if (!response.ok) {
+    const errorMessage =
+      result &&
+      typeof result === "object" &&
+      "error" in result &&
+      typeof result.error === "string"
+        ? result.error
+        : "";
+    throw new Error(errorMessage || "Cloud request failed.");
+  }
+  return result as T;
 }
 
 function jsonCopy<T>(value: T): T {
@@ -58,6 +124,7 @@ export function buildCloudExpenseDocument({
   group,
   receipt,
   statuses,
+  paymentProofs = {},
   updatedAt,
   createdAt = updatedAt
 }: BuildCloudExpenseInput): CloudExpenseDocument {
@@ -68,6 +135,7 @@ export function buildCloudExpenseDocument({
     name: group.name,
     receipt: { ...receipt, imageUrl: "" },
     statuses,
+    paymentProofs,
     createdAt,
     updatedAt
   });
@@ -85,111 +153,147 @@ export function canSendExpenseReminder(
   );
 }
 
-export async function saveExpense(
-  expense: CloudExpenseDocument
-): Promise<void> {
-  if (supabaseRuntime.client) {
-    await saveSupabaseExpense(
-      supabaseRuntime.client,
-      buildSupabaseExpenseRows({
-        expenseId: expense.id,
-        payerId: expense.payerId,
-        group: {
-          id: expense.id,
-          name: expense.name,
-          payerId: expense.payerId,
-          participantIds: expense.participantIds
-        },
-        receipt: expense.receipt,
-        statuses: expense.statuses,
-        updatedAt: expense.updatedAt,
-        createdAt: expense.createdAt
-      })
-    );
-    return;
+export async function saveUserProfile(_user: SessionUser): Promise<void> {
+  await cloudFetch("/api/profile/bootstrap", {
+    method: "POST",
+    body: JSON.stringify({
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    })
+  });
+}
+
+export function subscribeToPublicUsers(
+  _currentUserId: string,
+  onValue: (snapshot: PublicUsersSnapshot) => void,
+  onError: (error: Error) => void
+): () => void {
+  let active = true;
+  let timer: number | undefined;
+
+  async function loadProfiles() {
+    try {
+      const result = await publicCloudFetch<PublicUsersSnapshot>(
+        `/api/profiles/list?currentUserId=${encodeURIComponent(_currentUserId)}`
+      );
+      if (active) {
+        onValue({
+          profiles: result.profiles,
+          connectedFriendIds: result.connectedFriendIds ?? []
+        });
+      }
+    } catch (error) {
+      if (active) {
+        onError(error instanceof Error ? error : new Error("Profiles failed."));
+      }
+    }
   }
 
-  await setDoc(doc(requireFirestore(), "expenses", expense.id), expense, {
-    merge: true
+  void loadProfiles();
+  timer = window.setInterval(loadProfiles, 30000);
+  return () => {
+    active = false;
+    if (timer) {
+      window.clearInterval(timer);
+    }
+  };
+}
+
+export async function connectWithUser(
+  currentUserId: string,
+  friendId: string
+): Promise<void> {
+  await publicCloudFetch("/api/friends/connect", {
+    method: "POST",
+    body: JSON.stringify({ currentUserId, friendId })
+  });
+}
+
+export async function connectByFriendCode(
+  _currentUserId: string,
+  _friendCode: string
+): Promise<string> {
+  throw new Error("Friend-code connections will move to Supabase next.");
+}
+
+export async function saveExpense(
+  expense: BuildCloudExpenseInput
+): Promise<void> {
+  await cloudFetch("/api/expenses/upsert", {
+    method: "POST",
+    body: JSON.stringify(buildCloudExpenseDocument(expense))
   });
 }
 
 export function subscribeToExpense(
-  expenseId: string,
-  onValue: (expense: CloudExpenseDocument | null) => void,
-  onError: (error: Error) => void
+  _expenseId: string,
+  onValue: (expense: CloudExpenseDocument | null) => void
 ): () => void {
-  return onSnapshot(
-    doc(requireFirestore(), "expenses", expenseId),
-    (snapshot) => {
-      onValue(
-        snapshot.exists()
-          ? (snapshot.data() as CloudExpenseDocument)
-          : null
-      );
-    },
-    onError
-  );
+  onValue(null);
+  return () => undefined;
 }
 
 export function subscribeToUserExpenses(
-  userId: string,
-  onValue: (expenses: CloudExpenseDocument[]) => void,
-  onError: (error: Error) => void
+  _userId: string,
+  onValue: (expenses: CloudExpenseDocument[]) => void
 ): () => void {
-  const expensesQuery = query(
-    collection(requireFirestore(), "expenses"),
-    where("participantIds", "array-contains", userId)
-  );
-  return onSnapshot(
-    expensesQuery,
-    (snapshot) => {
-      onValue(
-        snapshot.docs.map(
-          (expense) => expense.data() as CloudExpenseDocument
-        )
+  let active = true;
+  let timer: number | undefined;
+
+  async function loadExpenses() {
+    try {
+      const result = await cloudFetch<{ expenses: CloudExpenseDocument[] }>(
+        "/api/expenses/list"
       );
-    },
-    onError
-  );
+      if (active) {
+        onValue(result.expenses);
+      }
+    } catch {
+      if (active) {
+        onValue([]);
+      }
+    }
+  }
+
+  void loadExpenses();
+  timer = window.setInterval(loadExpenses, 5000);
+  return () => {
+    active = false;
+    if (timer) {
+      window.clearInterval(timer);
+    }
+  };
 }
 
-async function tokenDocumentId(token: string): Promise<string> {
-  const data = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(digest)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
+export async function savePaymentProof(input: {
+  expenseId: string;
+  proof: PaymentProof;
+}): Promise<void> {
+  await cloudFetch("/api/payment-proofs/upsert", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function updateExpenseStatus(input: {
+  expenseId: string;
+  participantId: string;
+  status: PaymentStatus;
+}): Promise<void> {
+  await cloudFetch("/api/expenses/status", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }
 
 export async function saveDeviceToken(
-  userId: string,
+  _userId: string,
   token: string
 ): Promise<void> {
-  if (supabaseRuntime.client) {
-    await saveSupabaseDeviceToken(supabaseRuntime.client, {
-      userId,
+  await cloudFetch("/api/devices/register", {
+    method: "POST",
+    body: JSON.stringify({
       token,
-      userAgent:
-        typeof navigator === "undefined" ? "Unknown browser" : navigator.userAgent,
-      updatedAt: new Date().toISOString()
-    });
-    return;
-  }
-
-  await setDoc(
-    doc(
-      requireFirestore(),
-      "users",
-      userId,
-      "devices",
-      await tokenDocumentId(token)
-    ),
-    {
-      token,
-      enabled: true,
-      platform: navigator.userAgent,
-      updatedAt: new Date().toISOString()
-    }
-  );
+      platform: navigator.userAgent
+    })
+  });
 }

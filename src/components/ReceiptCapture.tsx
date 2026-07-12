@@ -1,33 +1,30 @@
-import { useState } from "react";
 import type { Receipt } from "../domain/types";
-import { prepareReceiptFile } from "../services/receiptImageFile";
 
 interface ReceiptCaptureProps {
   receipt: Receipt;
-  onUpload: (imageDataUrl: string) => Promise<void> | void;
+  isReadingReceipt?: boolean;
+  onUpload: (fileName: string, imageDataUrl: string) => void;
+  onReadReceipt: () => void;
 }
 
-export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
-  const [uploadError, setUploadError] = useState("");
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Receipt image could not be loaded."));
+    reader.readAsDataURL(file);
+  });
+}
+
+export function ReceiptCapture({
+  receipt,
+  isReadingReceipt = false,
+  onUpload,
+  onReadReceipt
+}: ReceiptCaptureProps) {
   const lowConfidence =
     receipt.ocrConfidence < 0.85 || receipt.items.some((item) => item.needsReview);
-
-  async function handleUpload(file: File): Promise<void> {
-    if (!file.type.startsWith("image/") && !/\.hei[cf]$/i.test(file.name)) {
-      setUploadError("Choose an image file for receipt OCR.");
-      return;
-    }
-
-    setUploadError("");
-    try {
-      const prepared = await prepareReceiptFile(file);
-      await onUpload(prepared.dataUrl);
-    } catch (error) {
-      setUploadError(
-        error instanceof Error ? error.message : "Receipt image could not be uploaded."
-      );
-    }
-  }
+  const canReadReceipt = Boolean(receipt.imageUrl) && !isReadingReceipt;
 
   return (
     <section className="panel">
@@ -52,25 +49,30 @@ export function ReceiptCapture({ receipt, onUpload }: ReceiptCaptureProps) {
         Upload receipt image
         <input
           type="file"
-          accept="image/*,.heic,.heif"
+          accept="image/*"
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) {
-              void handleUpload(file);
+              void readFileAsDataUrl(file).then((imageDataUrl) => {
+                onUpload(file.name, imageDataUrl);
+              });
             }
           }}
         />
       </label>
-      {uploadError ? (
-        <div className="notice warning" role="alert">
-          {uploadError}
-        </div>
-      ) : null}
+      <button
+        type="button"
+        className="secondary add-item-button"
+        disabled={!canReadReceipt}
+        onClick={onReadReceipt}
+      >
+        {isReadingReceipt ? "Reading receipt..." : "Read receipt"}
+      </button>
       <div className={lowConfidence ? "notice warning" : "notice"}>
         OCR confidence: {Math.round(receipt.ocrConfidence * 100)}%.
         {lowConfidence
-          ? " SplitSnap checked alternate image treatments and receipt layouts. Confirm the highlighted rows before splitting."
-          : " OCR and receipt totals look usable, and you can still correct every item."}
+          ? " SplitSnap would retry with layout detection and a YOLO-style fallback before asking you to correct items."
+          : " Simulated OCR looks usable, and you can still correct every item."}
       </div>
       {receipt.parseWarnings?.map((warning) => (
         <div className="notice warning" key={warning}>

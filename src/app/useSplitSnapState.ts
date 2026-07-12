@@ -10,9 +10,21 @@ import {
 } from "../domain/paymentProofService";
 import { updateReliabilityAfterPayment } from "../domain/reliability";
 import { parseCapturedReceipt } from "../domain/receiptParsingService";
-import { menuSelectionsToReceipt } from "../domain/restaurantCatalog";
 import { calculateSplit } from "../domain/splitCalculator";
+import {
+  connectWithUser,
+  type CloudExpenseDocument,
+  savePaymentProof,
+  saveExpense,
+  subscribeToPublicUsers,
+  subscribeToUserExpenses,
+  updateExpenseStatus,
+  type PublicUserProfile
+} from "../services/cloudWorkspace";
+import { sendPushReminder } from "../services/notificationClient";
+import { readReceiptImage } from "../services/receiptReader";
 import { loadLocalWorkspace, saveLocalWorkspace } from "../services/localWorkspace";
+import type { SessionUser } from "../services/authService";
 import type {
   DinnerGroup,
   Friend,
@@ -23,15 +35,10 @@ import type {
   PaymentStatus,
   Receipt
 } from "../domain/types";
-import type {
-  MenuCategory,
-  MenuSelection,
-  Restaurant
-} from "../domain/restaurantTypes";
 
 const expenseId = "saturday-dinner-2026-06-20";
 type ActiveRole = "unset" | "payer" | "participant";
-const payerId = "maya";
+const localPayerId = "maya";
 const initialConnectedFriendIds = ["nico", "bea"];
 const workspaceStorageKey = "splitsnap.workspace.v1";
 
@@ -50,81 +57,118 @@ interface StoredWorkspace {
 
 interface SplitSnapStateOptions {
   storage?: Storage;
+  currentUser?: SessionUser;
+  cloudMode?: boolean;
   parseReceipt?: typeof parseCapturedReceipt;
 }
 
-function buildGroup(participantIds: string[]): DinnerGroup {
+function buildGroup(participantIds: string[], payerId: string): DinnerGroup {
   return {
     ...demoGroup,
+    payerId,
     participantIds
   };
 }
 
-function buildCaptureRecoveryReceipt(
-  imageDataUrl: string,
-  participantIds: string[],
-  warning: string
-): Receipt {
+function avatarHueForId(id: string): number {
+  return [...id].reduce((total, character) => total + character.charCodeAt(0), 0) % 360;
+}
+
+function profileToFriend(profile: PublicUserProfile): Friend {
+  const name = profile.displayName || profile.firstName || "SplitSnap user";
   return {
-    id: `receipt-${Date.now()}`,
-    merchantName: "Scanned receipt",
-    date: new Date().toISOString().slice(0, 10),
-    imageUrl: imageDataUrl,
-    ocrConfidence: 0,
-    parserMode: "camera-ocr",
-    parseStatus: "Needs manual review",
-    parseWarnings: [warning],
-    items: [
-      {
-        id: "unrecognized-item-1",
-        name: "Unrecognized item",
-        quantity: 1,
-        price: 0,
-        assignedParticipantIds: participantIds,
-        confidence: 0,
-        parseSource: "ocr",
-        needsReview: true
-      }
-    ],
-    tax: 0,
-    serviceCharge: 0,
-    total: 0
+    id: profile.id,
+    name,
+    avatarLabel: name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "S",
+    avatarHue: avatarHueForId(profile.id),
+    reliabilityScore: 80,
+    tags: ["Pays on time"],
+    paymentHistory: [],
+    currentUnpaidBalance: 0
+  };
+}
+
+function sessionUserToFriend(user: SessionUser): Friend {
+  return profileToFriend({
+    id: user.id,
+    displayName: user.displayName,
+    firstName: user.firstName,
+    photoURL: user.photoURL,
+    handle: user.email.split("@")[0] || user.id,
+    friendCode: "",
+    updatedAt: new Date().toISOString()
+  });
+}
+
+function receiptWithManualTotal(receipt: Receipt): Receipt {
+  if (receipt.parserMode !== "manual") {
+    return receipt;
+  }
+
+  const itemsTotal = receipt.items.reduce((total, item) => total + item.price, 0);
+  return {
+    ...receipt,
+    total: itemsTotal + receipt.tax + receipt.serviceCharge
+  };
+}
+
+function createManualItem(participantIds: string[]): Receipt["items"][number] {
+  return {
+    id: `manual-item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: "New item",
+    quantity: 1,
+    price: 0,
+    assignedParticipantIds: participantIds,
+    confidence: 1,
+    parseSource: "manual",
+    needsReview: false
   };
 }
 
 export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
+  const isCloudMode = Boolean(options.cloudMode && options.currentUser);
+  const payerId = isCloudMode && options.currentUser ? options.currentUser.id : localPayerId;
+  const payerName = options.currentUser?.firstName ?? "Maya";
   const defaultNotifications = useMemo(
     () =>
       createExpenseNotifications({
         expenseId,
-        payerName: "Maya",
+        payerName,
         dinnerName: demoGroup.name,
         results: calculateSplit(
           demoReceipt,
-          buildGroup([payerId, ...initialConnectedFriendIds])
+          buildGroup([payerId, ...initialConnectedFriendIds], payerId)
         ).results,
         createdAt: new Date().toISOString()
       }),
-    []
+    [payerId, payerName]
   );
-  const [storedWorkspace] = useState<StoredWorkspace>(() =>
-    loadLocalWorkspace(
-      workspaceStorageKey,
-      {
-        friends: mockFriends,
-        receipt: demoReceipt,
-        activeRole: "unset",
-        payerStep: "home",
-        connectedFriendIds: initialConnectedFriendIds,
-        selectedDinnerFriendIds: [],
-        activeParticipantId: "nico",
-        paymentProofs: {},
-        statuses: {},
-        notifications: defaultNotifications
-      },
-      options.storage
-    )
-  );
+  const [storedWorkspace] = useState<StoredWorkspace>(() => {
+    const fallbackWorkspace: StoredWorkspace = {
+      friends:
+        isCloudMode && options.currentUser
+          ? [sessionUserToFriend(options.currentUser)]
+          : mockFriends,
+      receipt: demoReceipt,
+      activeRole: "unset",
+      payerStep: "home",
+      connectedFriendIds: isCloudMode ? [] : initialConnectedFriendIds,
+      selectedDinnerFriendIds: [],
+      activeParticipantId: isCloudMode ? "" : "nico",
+      paymentProofs: {},
+      statuses: {},
+      notifications: defaultNotifications
+    };
+
+    return isCloudMode
+      ? fallbackWorkspace
+      : loadLocalWorkspace(workspaceStorageKey, fallbackWorkspace, options.storage);
+  });
   const [friends, setFriends] = useState<Friend[]>(storedWorkspace.friends);
   const [receipt, setReceipt] = useState<Receipt>(storedWorkspace.receipt);
   const [activeRole, setActiveRole] = useState<ActiveRole>(storedWorkspace.activeRole);
@@ -138,6 +182,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
   const [capturedReceiptImageUrl, setCapturedReceiptImageUrl] = useState("");
   const [parseStatus, setParseStatus] = useState<ParseStatus>("Idle");
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
+  const [isReadingUploadedReceipt, setIsReadingUploadedReceipt] = useState(false);
   const [activeParticipantId, setActiveParticipantId] = useState(
     storedWorkspace.activeParticipantId
   );
@@ -147,11 +192,13 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
   const [statuses, setStatuses] = useState<Record<string, PaymentStatus>>(
     storedWorkspace.statuses
   );
+  const [cloudExpenses, setCloudExpenses] = useState<CloudExpenseDocument[]>([]);
+  const [activeCloudPayerId, setActiveCloudPayerId] = useState(payerId);
   const activeGroup = useMemo(() => {
     const dinnerFriendIds =
       selectedDinnerFriendIds.length > 0 ? selectedDinnerFriendIds : connectedFriendIds;
-    return buildGroup([payerId, ...dinnerFriendIds]);
-  }, [connectedFriendIds, selectedDinnerFriendIds]);
+    return buildGroup([activeCloudPayerId, ...dinnerFriendIds], activeCloudPayerId);
+  }, [activeCloudPayerId, connectedFriendIds, selectedDinnerFriendIds]);
   const split = useMemo(() => calculateSplit(receipt, activeGroup, statuses), [activeGroup, receipt, statuses]);
   const usedTransactionNumbers = useMemo(
     () =>
@@ -165,6 +212,10 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
   );
 
   useEffect(() => {
+    if (isCloudMode) {
+      return;
+    }
+
     const receiptWithoutImage = { ...receipt, imageUrl: "" };
     saveLocalWorkspace(
       workspaceStorageKey,
@@ -196,10 +247,87 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     statuses
   ]);
 
+  useEffect(() => {
+    if (!isCloudMode || !options.currentUser) {
+      return;
+    }
+
+    return subscribeToPublicUsers(
+      options.currentUser.id,
+      ({ profiles }) => {
+        setFriends([sessionUserToFriend(options.currentUser!), ...profiles.map(profileToFriend)]);
+      },
+      () => {
+        setFriends([sessionUserToFriend(options.currentUser!)]);
+      }
+    );
+  }, [isCloudMode, options.currentUser]);
+
+  useEffect(() => {
+    if (!isCloudMode || !options.currentUser) {
+      return;
+    }
+
+    return subscribeToUserExpenses(options.currentUser.id, setCloudExpenses);
+  }, [isCloudMode, options.currentUser]);
+
+  function currentCloudExpense(updatedAt = new Date().toISOString()) {
+    return {
+      expenseId: receipt.id,
+      payerId: activeGroup.payerId,
+      group: activeGroup,
+      receipt,
+      statuses,
+      paymentProofs,
+      updatedAt
+    };
+  }
+
+  async function persistCurrentCloudExpense() {
+    if (!isCloudMode || activeGroup.payerId !== payerId) {
+      return;
+    }
+
+    await saveExpense(currentCloudExpense());
+    setParseWarnings((current) =>
+      current.filter((warning) => !warning.startsWith("Cloud save failed:"))
+    );
+  }
+
+  async function saveDinner() {
+    if (!isCloudMode) {
+      return;
+    }
+
+    try {
+      await persistCurrentCloudExpense();
+    } catch (error) {
+      setParseWarnings((current) => [
+        ...current.filter((warning) => !warning.startsWith("Cloud save failed:")),
+        `Cloud save failed: ${error instanceof Error ? error.message : "Dinner was not saved."}`
+      ]);
+      throw error;
+    }
+  }
+
   function connectFriend(friendId: string) {
+    setActiveCloudPayerId(payerId);
     setConnectedFriendIds((current) =>
       current.includes(friendId) ? current : [...current, friendId]
     );
+    setActiveParticipantId((current) => current || friendId);
+
+    if (isCloudMode) {
+      void connectWithUser(payerId, friendId).catch(() => {
+        setConnectedFriendIds((current) => current.filter((id) => id !== friendId));
+      });
+    }
+  }
+
+  function disconnectFriend(friendId: string) {
+    setConnectedFriendIds((current) => current.filter((id) => id !== friendId));
+    setSelectedDinnerFriendIds((current) => current.filter((id) => id !== friendId));
+    setActiveParticipantId((current) => (current === friendId ? "" : current));
   }
 
   function toggleDinnerFriend(friendId: string) {
@@ -215,6 +343,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
   }
 
   function goToGroupSetup() {
+    setActiveCloudPayerId(payerId);
     setPayerStep("group");
   }
 
@@ -222,26 +351,11 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     setPayerStep("scanner");
   }
 
-  function useRestaurantMenu(
-    restaurant: Restaurant,
-    menu: MenuCategory[],
-    selections: MenuSelection[]
-  ) {
-    const nextReceipt = menuSelectionsToReceipt(
-      restaurant,
-      menu,
-      selections,
-      activeGroup.participantIds
-    );
-    setReceipt(nextReceipt);
-    setParseStatus("Ready to split");
-    setParseWarnings([]);
-    setPayerStep("review");
-  }
-
   function useManualReceipt() {
+    setActiveCloudPayerId(payerId);
+    const now = Date.now();
     const nextReceipt: Receipt = {
-      id: `manual-${Date.now()}`,
+      id: `manual-${now}`,
       merchantName: "Manual dinner",
       date: new Date().toISOString().slice(0, 10),
       imageUrl: "",
@@ -249,18 +363,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
       parserMode: "manual",
       parseStatus: "Ready to split",
       parseWarnings: [],
-      items: [
-        {
-          id: `manual-item-${Date.now()}`,
-          name: "New item",
-          quantity: 1,
-          price: 0,
-          assignedParticipantIds: activeGroup.participantIds,
-          confidence: 1,
-          parseSource: "manual",
-          needsReview: false
-        }
-      ],
+      items: [createManualItem(activeGroup.participantIds)],
       tax: 0,
       serviceCharge: 0,
       total: 0
@@ -269,47 +372,78 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     setPayerStep("review");
   }
 
+  function addManualItem() {
+    setReceipt((current) =>
+      receiptWithManualTotal({
+        ...current,
+        parserMode: "manual",
+        items: [...current.items, createManualItem(activeGroup.participantIds)]
+      })
+    );
+  }
+
   async function captureReceipt(imageDataUrl: string) {
+    setActiveCloudPayerId(payerId);
     setPayerStep("parsing");
     setParseStatus("Scanning receipt");
     setCapturedReceiptImageUrl(imageDataUrl);
 
     const participantIds = activeGroup.participantIds;
-    setParseStatus("Reading receipt");
+    const parseReceipt = options.parseReceipt ?? parseCapturedReceipt;
+    const parsed = await parseReceipt({ imageDataUrl, participantIds });
 
+    setReceipt(parsed.receipt);
+    setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");
+    setParseWarnings(parsed.warnings);
+    setNotifications(
+      createExpenseNotifications({
+        expenseId,
+        payerName,
+        dinnerName: activeGroup.name,
+        results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
+        createdAt: new Date().toISOString()
+      })
+    );
+    setPayerStep("review");
+  }
+
+  async function readUploadedReceipt() {
+    if (!receipt.imageUrl) {
+      setParseWarnings((current) => [
+        ...current.filter((warning) => !warning.startsWith("Receipt read failed:")),
+        "Receipt read failed: Upload a receipt image first."
+      ]);
+      return;
+    }
+
+    setIsReadingUploadedReceipt(true);
+    setParseStatus("OCR reading items");
     try {
-      const parseReceipt = options.parseReceipt ?? parseCapturedReceipt;
-      const parsed = await parseReceipt({
-        imageDataUrl,
-        participantIds,
-        onStatus: setParseStatus
+      const parsed = await readReceiptImage({
+        imageDataUrl: receipt.imageUrl,
+        participantIds: activeGroup.participantIds
       });
-      const hasPositivePriceItem = parsed.receipt.items.some((item) => item.price > 0);
-
       setReceipt(parsed.receipt);
       setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");
       setParseWarnings(parsed.warnings);
       setNotifications(
-        hasPositivePriceItem
-          ? createExpenseNotifications({
-              expenseId,
-              payerName: "Maya",
-              dinnerName: activeGroup.name,
-              results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
-              createdAt: new Date().toISOString()
-            })
-          : []
+        createExpenseNotifications({
+          expenseId,
+          payerName,
+          dinnerName: activeGroup.name,
+          results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
+          createdAt: new Date().toISOString()
+        })
       );
     } catch (error) {
-      const warning = "The receipt scan could not finish. Check your connection and try again.";
-      setParseStatus("Scan failed");
-      setParseWarnings([warning]);
-      setNotifications([]);
-      setPayerStep("scanner");
-      throw error;
+      setParseStatus("Needs manual review");
+      setParseWarnings((current) => [
+        ...current.filter((warning) => !warning.startsWith("Receipt read failed:")),
+        `Receipt read failed: ${error instanceof Error ? error.message : "Gemini could not read this receipt."}`
+      ]);
+    } finally {
+      setIsReadingUploadedReceipt(false);
     }
-
-    setPayerStep("review");
   }
 
   function toggleItemParticipant(itemId: string, participantId: string) {
@@ -332,29 +466,17 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }));
   }
 
-  function setItemParticipants(itemId: string, participantIds: string[]) {
-    setReceipt((current) => ({
-      ...current,
-      items: current.items.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              assignedParticipantIds: [...new Set(participantIds)]
-            }
-          : item
-      )
-    }));
-  }
-
   function updateItemPrice(itemId: string, price: number) {
-    setReceipt((current) => ({
-      ...current,
-      items: current.items.map((item) =>
-        item.id === itemId
-          ? { ...item, price, parseSource: item.parseSource ?? "manual", needsReview: false }
-          : item
-      )
-    }));
+    setReceipt((current) =>
+      receiptWithManualTotal({
+        ...current,
+        items: current.items.map((item) =>
+          item.id === itemId
+            ? { ...item, price, parseSource: item.parseSource ?? "manual", needsReview: false }
+            : item
+        )
+      })
+    );
   }
 
   function updateItemName(itemId: string, name: string) {
@@ -369,12 +491,16 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
   }
 
   function updateItemQuantity(itemId: string, quantity: number) {
-    const normalizedQuantity = Math.max(1, Math.round(quantity || 1));
     setReceipt((current) => ({
       ...current,
       items: current.items.map((item) =>
         item.id === itemId
-          ? { ...item, quantity: normalizedQuantity, parseSource: "manual", needsReview: false }
+          ? {
+              ...item,
+              quantity: Math.max(1, Math.floor(quantity || 1)),
+              parseSource: item.parseSource ?? "manual",
+              needsReview: false
+            }
           : item
       )
     }));
@@ -390,13 +516,37 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
       createReminderNotification({
         expenseId,
         participantId,
-        payerName: "Maya",
+        payerName,
         amount: result.totalOwed,
         createdAt: new Date().toISOString()
       }),
       ...current
     ]);
     setStatuses((current) => ({ ...current, [participantId]: "reminded" }));
+    if (isCloudMode) {
+      void persistCurrentCloudExpense()
+        .then(() =>
+          updateExpenseStatus({
+            expenseId: receipt.id,
+            participantId,
+            status: "reminded"
+          })
+        )
+        .then(() =>
+          sendPushReminder({
+            expenseId: receipt.id,
+            participantId,
+            title: "Payment reminder",
+            body: `${payerName} is waiting on your SplitSnap balance. Open Activity to view the breakdown.`
+          })
+        )
+        .catch((error) => {
+          setParseWarnings((current) => [
+            ...current.filter((warning) => !warning.startsWith("Reminder failed:")),
+            `Reminder failed: ${error instanceof Error ? error.message : "Push was not sent."}`
+          ]);
+        });
+    }
   }
 
   function markPaid(participantId: string) {
@@ -406,6 +556,13 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }
 
     setStatuses((current) => ({ ...current, [participantId]: "paid" }));
+    if (isCloudMode) {
+      void updateExpenseStatus({
+        expenseId: receipt.id,
+        participantId,
+        status: "paid"
+      }).catch(() => undefined);
+    }
     setFriends((current) =>
       current.map((friend) =>
         friend.id === participantId
@@ -431,14 +588,14 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
       fileName,
       participantName: friend.name,
       expectedAmount: result.totalOwed,
-      payerName: "Maya",
+      payerName,
       dinnerDate: receipt.date
     });
     const validation = validatePaymentProof(extracted, {
       participantId,
       expectedAmount: result.totalOwed,
       dinnerDate: receipt.date,
-      payerName: "Maya",
+      payerName,
       usedTransactionNumbers
     });
     const proof: PaymentProof = {
@@ -451,26 +608,48 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     };
 
     setPaymentProofs((current) => ({ ...current, [participantId]: proof }));
-
-    if (validation.valid) {
-      setStatuses((current) => ({ ...current, [participantId]: "paid" }));
-      setFriends((current) =>
-        current.map((item) =>
-          item.id === participantId
-            ? updateReliabilityAfterPayment(item, {
-                expenseId,
-                paidAtDaysFromDue: 0,
-                remindersSent: statuses[participantId] === "reminded" ? 1 : 0,
-                amountPaid: result.totalOwed
-              })
-            : item
-        )
-      );
+    if (isCloudMode) {
+      void savePaymentProof({
+        expenseId: receipt.id,
+        proof
+      }).catch(() => undefined);
     }
   }
 
-  async function uploadReceipt(imageDataUrl: string) {
-    await captureReceipt(imageDataUrl);
+  function openCloudExpense(expenseIdToOpen: string, participantId?: string) {
+    const cloudExpense = cloudExpenses.find((expense) => expense.id === expenseIdToOpen);
+    if (!cloudExpense) {
+      return;
+    }
+
+    setActiveCloudPayerId(cloudExpense.payerId);
+    setConnectedFriendIds(
+      cloudExpense.participantIds.filter((participant) => participant !== cloudExpense.payerId)
+    );
+    setSelectedDinnerFriendIds([]);
+    setReceipt(cloudExpense.receipt);
+    setStatuses(cloudExpense.statuses || {});
+    setPaymentProofs(cloudExpense.paymentProofs || {});
+    setActiveParticipantId(participantId || options.currentUser?.id || "");
+  }
+
+  function simulateUpload(fileName: string, imageDataUrl = "") {
+    setReceipt((current) => ({
+      ...current,
+      parserMode: "simulated-upload",
+      merchantName: fileName.replace(/\.[^.]+$/, "") || "Uploaded receipt",
+      imageUrl: imageDataUrl || current.imageUrl,
+      ocrConfidence: 0.62,
+      parseStatus: "Needs manual review",
+      parseWarnings: ["Uploaded receipt image is ready. Tap Read receipt to let Gemini fill the items."],
+      items: current.items.map((item) =>
+        item.confidence < 0.85
+          ? { ...item, parseSource: "manual", needsReview: true, confidence: Math.min(item.confidence, 0.62) }
+          : item
+      )
+    }));
+    setParseStatus("Needs manual review");
+    setParseWarnings(["Uploaded receipt image is ready. Tap Read receipt to let Gemini fill the items."]);
   }
 
   return {
@@ -479,6 +658,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     receipt,
     split,
     notifications,
+    cloudExpenses,
     statuses,
     activeRole,
     payerStep,
@@ -487,26 +667,30 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     capturedReceiptImageUrl,
     parseStatus,
     parseWarnings,
+    isReadingUploadedReceipt,
     activeParticipantId,
     paymentProofs,
     setActiveRole,
     setPayerStep,
     setActiveParticipantId,
     connectFriend,
+    disconnectFriend,
     toggleDinnerFriend,
     goToGroupSetup,
     goToScanner,
     captureReceipt,
-    useRestaurantMenu,
+    readUploadedReceipt,
     useManualReceipt,
+    addManualItem,
     toggleItemParticipant,
-    setItemParticipants,
     updateItemPrice,
     updateItemName,
     updateItemQuantity,
     sendReminder,
     markPaid,
+    saveDinner,
     submitPaymentProof,
-    uploadReceipt
+    openCloudExpense,
+    simulateUpload
   };
 }

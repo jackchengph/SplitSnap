@@ -106,7 +106,6 @@ export function ProfilePage({
             className="secondary"
             disabled={
               !notificationReady ||
-              notificationStatus === "granted" ||
               notificationStatus === "enabling"
             }
             onClick={() => void enableNotifications()}
@@ -114,7 +113,7 @@ export function ProfilePage({
             {!notificationReady
               ? "Configure Firebase to enable push"
               : notificationStatus === "granted"
-                ? "Enabled on this device"
+                ? "Sync this device"
                 : notificationStatus === "enabling"
                   ? "Enabling..."
                   : "Enable notifications"}

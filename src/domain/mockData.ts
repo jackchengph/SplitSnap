@@ -62,7 +62,7 @@ export const demoGroup: DinnerGroup = {
 
 export const demoReceipt: Receipt = {
   id: "receipt-1",
-  merchantName: "Sora Sushi Bar",
+  merchantName: "Scanned receipt",
   date: "2026-06-20",
   imageUrl: "",
   ocrConfidence: 0.88,
@@ -72,32 +72,32 @@ export const demoReceipt: Receipt = {
   total: 5108.5,
   items: [
     {
-      id: "sushi-platter",
-      name: "Sushi platter",
+      id: "shared-platter",
+      name: "Shared platter",
       quantity: 1,
       price: 1200,
       assignedParticipantIds: ["maya", "nico", "bea"],
       confidence: 0.91
     },
     {
-      id: "ramen-nico",
-      name: "Tonkotsu ramen",
+      id: "main-nico",
+      name: "Main dish",
       quantity: 1,
       price: 620,
       assignedParticipantIds: ["nico"],
       confidence: 0.86
     },
     {
-      id: "tempura",
-      name: "Tempura basket",
+      id: "shared-side",
+      name: "Shared side",
       quantity: 1,
       price: 720,
       assignedParticipantIds: ["bea", "enzo", "lia"],
       confidence: 0.82
     },
     {
-      id: "gyoza",
-      name: "Gyoza",
+      id: "appetizer",
+      name: "Appetizer",
       quantity: 2,
       price: 560,
       assignedParticipantIds: ["maya", "nico", "bea", "enzo", "lia"],
@@ -105,7 +105,7 @@ export const demoReceipt: Receipt = {
     },
     {
       id: "drinks",
-      name: "Iced tea pitcher",
+      name: "Drinks",
       quantity: 1,
       price: 420,
       assignedParticipantIds: ["nico", "bea", "lia"],
@@ -113,7 +113,7 @@ export const demoReceipt: Receipt = {
     },
     {
       id: "dessert",
-      name: "Matcha cheesecake",
+      name: "Dessert",
       quantity: 2,
       price: 1020,
       assignedParticipantIds: ["enzo", "lia"],
