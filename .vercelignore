@@ -1,0 +1,6 @@
+**/*.test.ts
+**/*.test.tsx
+.agents/
+.worktrees/
+node_modules/
+dist/
