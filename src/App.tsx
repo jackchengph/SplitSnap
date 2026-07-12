@@ -150,6 +150,7 @@ function AuthenticatedSplitSnapApp({
         notifications={state.notifications}
         paymentProofs={state.paymentProofs}
         payerName={activePayerName}
+        parseWarnings={state.parseWarnings}
         onHome={goHome}
         onSaveDinner={state.saveDinner}
         isReadingUploadedReceipt={state.isReadingUploadedReceipt}

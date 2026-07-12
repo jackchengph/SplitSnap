@@ -42,4 +42,19 @@ describe("ReceiptCapture", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read receipt" }));
     expect(onReadReceipt).toHaveBeenCalledOnce();
   });
+
+  it("shows receipt read errors passed from the scanner workflow", () => {
+    render(
+      <ReceiptCapture
+        receipt={{ ...demoReceipt, imageUrl: "data:image/png;base64,abc" }}
+        parseWarnings={["Receipt read failed: Receipt scanning is not configured."]}
+        onUpload={vi.fn()}
+        onReadReceipt={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText("Receipt read failed: Receipt scanning is not configured.")
+    ).toBeInTheDocument();
+  });
 });

@@ -54,7 +54,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       return;
     }
     if (error instanceof GeminiConfigurationError) {
-      response.status(503).json({ error: "Gemini receipt scanning is not configured." });
+      response.status(503).json({ error: "Receipt scanning is not configured." });
       return;
     }
     if (error instanceof GeminiRateLimitError) {

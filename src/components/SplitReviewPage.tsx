@@ -22,6 +22,7 @@ interface SplitReviewPageProps {
   notifications: Notification[];
   paymentProofs: Record<string, PaymentProof>;
   payerName: string;
+  parseWarnings: string[];
   onHome: () => void;
   onSaveDinner: () => Promise<void>;
   isReadingUploadedReceipt: boolean;
@@ -44,6 +45,7 @@ export function SplitReviewPage({
   notifications,
   paymentProofs,
   payerName,
+  parseWarnings,
   onHome,
   onSaveDinner,
   isReadingUploadedReceipt,
@@ -90,6 +92,7 @@ export function SplitReviewPage({
           <ReceiptCapture
             receipt={receipt}
             isReadingReceipt={isReadingUploadedReceipt}
+            parseWarnings={parseWarnings}
             onUpload={onUpload}
             onReadReceipt={onReadReceipt}
           />

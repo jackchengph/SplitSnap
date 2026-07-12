@@ -35,6 +35,20 @@ interface ReadReceiptResult {
   warnings: string[];
 }
 
+class ScannerConfigurationError extends Error {
+  constructor() {
+    super("Receipt scanning is not configured.");
+    this.name = "ScannerConfigurationError";
+  }
+}
+
+class ScannerProviderError extends Error {
+  constructor(message = "Receipt scanning could not be completed.") {
+    super(message);
+    this.name = "ScannerProviderError";
+  }
+}
+
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -87,6 +101,39 @@ function slugify(value: string, index: number): string {
   return `${slug || "receipt-item"}-${index + 1}`;
 }
 
+function isAssignableItemName(name: string): boolean {
+  const normalized = name
+    .toLowerCase()
+    .replace(/[^a-z0-9%&]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return false;
+  }
+
+  const summaryPatterns = [
+    /\bsub\s*total\b/,
+    /\bsubtotal\b/,
+    /\bprice\s*w\s*o\b/,
+    /\bvat\b/,
+    /\btax\b/,
+    /\bdiscount\b/,
+    /\bnet\s*amount\b/,
+    /\bamount\s*due\b/,
+    /\btotal\s*amount\b/,
+    /\btotal\b/,
+    /\bvatable\b/,
+    /\bzero\s*rated\b/,
+    /\bsettlement\b/,
+    /\bcash\b/,
+    /\bcard\b/,
+    /\bpayment\b/
+  ];
+
+  return !summaryPatterns.some((pattern) => pattern.test(normalized));
+}
+
 function receiptFromGemini(
   payload: GeminiReceiptPayload,
   imageDataUrl: string,
@@ -100,7 +147,7 @@ function receiptFromGemini(
     const unitPrice = readNumber(item.unitPrice);
     const lineTotal = readNumber(item.lineTotal) || unitPrice * quantity;
 
-    if (!name || lineTotal <= 0) {
+    if (!name || lineTotal <= 0 || !isAssignableItemName(name)) {
       return parsed;
     }
 
@@ -147,7 +194,7 @@ function geminiApiKey(): string {
     process.env.GOOGLE_API_KEY ||
     "";
   if (!key) {
-    throw new Error("Gemini API key is not configured.");
+    throw new ScannerConfigurationError();
   }
   return key;
 }
@@ -157,21 +204,22 @@ async function callGemini(imageDataUrl: string): Promise<GeminiReceiptPayload> {
   const key = geminiApiKey();
   const models = [
     process.env.GEMINI_MODEL || "",
-    "gemini-3.5-flash",
-    "gemini-flash-latest"
+    "gemini-flash-latest",
+    "gemini-2.0-flash"
   ].filter((model, index, all) => model && all.indexOf(model) === index);
   const prompt = [
-    "Read this restaurant receipt and return only valid JSON.",
+    "Read this Philippine restaurant receipt and return only valid JSON.",
     "Rules:",
-    "- Include food/drink line items only.",
-    "- Stop assigning items when you reach Sub Total, Subtotal, Total, VAT breakdown, payment, or settlement sections.",
+    "- Extract assignable food/drink line items only from the item table before Sub Total/Subtotal.",
+    "- Do not include Sub Total, Price w/o VAT&SC, Discount, Net Amount, VAT, AMOUNT DUE, VAT BREAKDOWN, settlement, cash, card, payment, or zero-rated rows as items.",
+    "- If a line wraps, merge continuation text into the previous item name until the next row with quantity/price/amount.",
     "- If AMOUNT DUE exists, use it as amountDue and total.",
     "- VAT/tax is tax, not an item.",
     "- Use numeric PHP amounts with no currency symbol.",
     'Schema: {"merchantName":"string","date":"YYYY-MM-DD or original date","items":[{"name":"string","quantity":number,"unitPrice":number,"lineTotal":number}],"subtotal":number,"tax":number,"serviceCharge":number,"total":number,"amountDue":number}'
   ].join("\n");
 
-  let lastError = "Gemini receipt scan failed.";
+  let lastError = "Receipt scanning could not be completed.";
   for (const model of models) {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
@@ -220,7 +268,24 @@ async function callGemini(imageDataUrl: string): Promise<GeminiReceiptPayload> {
     }
   }
 
-  throw new Error(lastError);
+  throw new ScannerProviderError(lastError);
+}
+
+function responseForError(error: unknown): { statusCode: number; message: string } {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "Authentication required.") {
+    return { statusCode: 401, message };
+  }
+  if (error instanceof ScannerConfigurationError) {
+    return { statusCode: 503, message: "Receipt scanning is not configured." };
+  }
+  if (message === "Upload a receipt image first.") {
+    return { statusCode: 400, message };
+  }
+  return {
+    statusCode: 500,
+    message: "Receipt scanning could not be completed."
+  };
 }
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
@@ -247,15 +312,13 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       statuses: ["Scanning receipt", "OCR reading items", "Ready to split"],
       warnings:
         receipt.items.length === 0
-          ? ["Gemini could not find item rows. Add them manually before saving."]
+          ? ["Receipt scanning could not find item rows. Add them manually before saving."]
           : []
     };
 
     response.status(200).json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Receipt could not be read.";
-    response.status(message === "Authentication required." ? 401 : 500).json({
-      error: message
-    });
+    const { statusCode, message } = responseForError(error);
+    response.status(statusCode).json({ error: message });
   }
 }

@@ -88,7 +88,7 @@ describe("POST /api/receipts/parse", () => {
   });
 
   it.each([
-    [new GeminiConfigurationError(), 503, "Gemini receipt scanning is not configured."],
+    [new GeminiConfigurationError(), 503, "Receipt scanning is not configured."],
     [new GeminiRateLimitError(), 429, "Receipt scanning is busy. Trying local OCR is recommended."],
     [new GeminiProviderError(), 500, "Receipt scanning could not be completed."]
   ] as const)("sanitizes provider failures", async (error, statusCode, message) => {
