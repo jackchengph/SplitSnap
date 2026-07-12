@@ -28,7 +28,8 @@ function readBearerToken(request: ApiRequest): string {
 
 export async function requireUserId(request: ApiRequest): Promise<string> {
   try {
-    const decodedToken = await adminAuth().verifyIdToken(readBearerToken(request));
+    const token = readBearerToken(request);
+    const decodedToken = await adminAuth().verifyIdToken(token);
     return decodedToken.uid;
   } catch {
     throw new Error("Authentication required.");
