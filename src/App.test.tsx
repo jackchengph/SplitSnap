@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -189,7 +189,9 @@ describe("App", () => {
       screen.getByLabelText(/Upload receipt image/i),
       new File(["receipt"], "receipt.png", { type: "image/png" })
     );
-    await user.click(screen.getByRole("button", { name: "Read receipt" }));
+    const readReceiptButton = await screen.findByRole("button", { name: "Read receipt" });
+    await waitFor(() => expect(readReceiptButton).toBeEnabled());
+    await user.click(readReceiptButton);
 
     expect(await screen.findByDisplayValue("Latte")).toBeInTheDocument();
     expect(screen.getByDisplayValue("2")).toBeInTheDocument();

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { Receipt } from "../domain/types";
+import { prepareReceiptFile } from "../services/receiptImageFile";
 
 interface ReceiptCaptureProps {
   receipt: Receipt;
@@ -7,22 +9,14 @@ interface ReceiptCaptureProps {
   onReadReceipt: () => void;
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Receipt image could not be loaded."));
-    reader.readAsDataURL(file);
-  });
-}
-
 export function ReceiptCapture({
   receipt,
   isReadingReceipt = false,
   onUpload,
   onReadReceipt
 }: ReceiptCaptureProps) {
-  const canReadReceipt = Boolean(receipt.imageUrl) && !isReadingReceipt;
+  const [isPreparingReceipt, setIsPreparingReceipt] = useState(false);
+  const canReadReceipt = Boolean(receipt.imageUrl) && !isReadingReceipt && !isPreparingReceipt;
 
   return (
     <section className="panel">
@@ -48,9 +42,13 @@ export function ReceiptCapture({
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) {
-              void readFileAsDataUrl(file).then((imageDataUrl) => {
-                onUpload(file.name, imageDataUrl);
-              });
+              setIsPreparingReceipt(true);
+              void prepareReceiptFile(file)
+                .then(({ dataUrl }) => {
+                  onUpload(file.name, dataUrl);
+                })
+                .catch(() => undefined)
+                .finally(() => setIsPreparingReceipt(false));
             }
           }}
         />
@@ -61,7 +59,7 @@ export function ReceiptCapture({
         disabled={!canReadReceipt}
         onClick={onReadReceipt}
       >
-        {isReadingReceipt ? "Reading receipt..." : "Read receipt"}
+        {isPreparingReceipt ? "Preparing receipt..." : isReadingReceipt ? "Reading receipt..." : "Read receipt"}
       </button>
     </section>
   );

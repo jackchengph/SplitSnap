@@ -4,6 +4,19 @@ import { describe, expect, it, vi } from "vitest";
 import { demoReceipt } from "../domain/mockData";
 import { ReceiptCapture } from "./ReceiptCapture";
 
+vi.mock("heic2any", () => ({
+  default: vi.fn(async () => new Blob(["jpeg-bytes"], { type: "image/jpeg" }))
+}));
+
+function heicBytes(): Uint8Array {
+  return new Uint8Array([
+    0, 0, 0, 36,
+    ...Array.from("ftypheic").map((character) => character.charCodeAt(0)),
+    0, 0, 0, 0,
+    ...Array.from("mif1").map((character) => character.charCodeAt(0))
+  ]);
+}
+
 describe("ReceiptCapture", () => {
   it("reads uploaded image bytes as a data URL", async () => {
     const user = userEvent.setup();
@@ -25,6 +38,30 @@ describe("ReceiptCapture", () => {
       expect(onUpload).toHaveBeenCalledWith(
         "receipt.png",
         "data:image/png;base64,cmVjZWlwdC1ieXRlcw=="
+      );
+    });
+  });
+
+  it("converts HEIC uploads before sending them to receipt scanning", async () => {
+    const user = userEvent.setup();
+    const onUpload = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ReceiptCapture
+        receipt={demoReceipt}
+        onUpload={onUpload}
+        onReadReceipt={vi.fn()}
+      />
+    );
+
+    await user.upload(
+      screen.getByLabelText(/Upload receipt image/i),
+      new File([Uint8Array.from(heicBytes()).buffer], "IMG_9974.HEIC", { type: "image/heic" })
+    );
+
+    await waitFor(() => {
+      expect(onUpload).toHaveBeenCalledWith(
+        "IMG_9974.HEIC",
+        "data:image/jpeg;base64,anBlZy1ieXRlcw=="
       );
     });
   });
