@@ -527,20 +527,44 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
 
     const participantIds = activeGroup.participantIds;
     const parseReceipt = options.parseReceipt ?? parseCapturedReceipt;
-    const parsed = await parseReceipt({ imageDataUrl, participantIds });
+    try {
+      const parsed = await parseReceipt({ imageDataUrl, participantIds });
 
-    setReceipt(parsed.receipt);
-    setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");
-    setParseWarnings(parsed.warnings);
-    setNotifications(
-      createExpenseNotifications({
-        expenseId,
-        payerName,
-        dinnerName: activeGroup.name,
-        results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
-        createdAt: new Date().toISOString()
-      })
-    );
+      setReceipt(parsed.receipt);
+      setParseStatus(parsed.receipt.parseStatus ?? "Ready to split");
+      setParseWarnings(parsed.warnings);
+      setNotifications(
+        createExpenseNotifications({
+          expenseId,
+          payerName,
+          dinnerName: activeGroup.name,
+          results: calculateSplit(parsed.receipt, activeGroup, statuses).results,
+          createdAt: new Date().toISOString()
+        })
+      );
+    } catch (error) {
+      const fallbackReceipt: Receipt = {
+        id: `manual-capture-${Date.now()}`,
+        merchantName: "Captured receipt",
+        date: new Date().toISOString().slice(0, 10),
+        imageUrl: imageDataUrl,
+        ocrConfidence: 0,
+        parserMode: "manual",
+        parseStatus: "Needs manual review",
+        parseWarnings: [
+          `Receipt scan failed: ${error instanceof Error ? error.message : "Gemini could not read this receipt."}`,
+          "Add or edit the items below, then save the dinner."
+        ],
+        items: [{ ...createManualItem(participantIds), needsReview: true }],
+        tax: 0,
+        serviceCharge: 0,
+        total: 0
+      };
+      setReceipt(fallbackReceipt);
+      setParseStatus("Needs manual review");
+      setParseWarnings(fallbackReceipt.parseWarnings ?? []);
+      setNotifications([]);
+    }
     setPayerStep("review");
   }
 

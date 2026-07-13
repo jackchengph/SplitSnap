@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type { SessionUser } from "./services/authService";
 import { bootstrapProfile } from "./services/profileService";
+import { parseCapturedReceipt } from "./domain/receiptParsingService";
 
 vi.mock("./services/profileService", () => ({
   bootstrapProfile: vi.fn()
@@ -209,6 +210,24 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: /Scanned receipt/i })
     ).toBeInTheDocument();
+  });
+
+  it("moves to manual review when receipt scanning fails", async () => {
+    vi.mocked(parseCapturedReceipt).mockRejectedValueOnce(new Error("Gemini timed out"));
+    const user = userEvent.setup();
+    render(<App />);
+    await enterPreview(user);
+    await user.click(screen.getByRole("button", { name: /Start a split/i }));
+    await selectDinnerFriend(user);
+    await user.click(screen.getByRole("button", { name: /Scan a receipt/i }));
+
+    await user.click(screen.getByRole("button", { name: /Capture receipt/i }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /Captured receipt/i })
+    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("New item")).toBeInTheDocument();
+    expect(screen.getByText(/Receipt scan failed: Gemini timed out/i)).toBeInTheDocument();
   });
 
   it("opens a participant breakdown from Activity and validates proof", async () => {

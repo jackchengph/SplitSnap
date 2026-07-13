@@ -154,6 +154,33 @@ describe("useSplitSnapState", () => {
     });
   });
 
+  it("keeps captured receipt scans editable when Gemini scanning fails", async () => {
+    const parseReceipt = vi.fn().mockRejectedValue(new Error("Gemini timed out"));
+    const { result } = renderHook(() => useSplitSnapState({ parseReceipt }));
+
+    act(() => {
+      result.current.toggleDinnerFriend("nico");
+    });
+
+    await act(async () => {
+      await result.current.captureReceipt("data:image/jpeg;base64,captured");
+    });
+
+    expect(result.current.payerStep).toBe("review");
+    expect(result.current.capturedReceiptImageUrl).toBe("data:image/jpeg;base64,captured");
+    expect(result.current.receipt.imageUrl).toBe("data:image/jpeg;base64,captured");
+    expect(result.current.receipt.items).toHaveLength(1);
+    expect(result.current.receipt.items[0]).toMatchObject({
+      name: "New item",
+      quantity: 1,
+      price: 0,
+      parseSource: "manual",
+      needsReview: true
+    });
+    expect(result.current.parseStatus).toBe("Needs manual review");
+    expect(result.current.parseWarnings.join("\n")).toMatch(/Gemini timed out/);
+  });
+
   it("creates a reminder and marks participant reminded", () => {
     const { result } = renderHook(() => useSplitSnapState());
 
