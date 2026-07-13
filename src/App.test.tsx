@@ -2,6 +2,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
+import type { SessionUser } from "./services/authService";
+import { bootstrapProfile } from "./services/profileService";
+
+vi.mock("./services/profileService", () => ({
+  bootstrapProfile: vi.fn()
+}));
 
 vi.mock("./services/receiptReader", () => ({
   readReceiptImage: vi.fn().mockResolvedValue({
@@ -72,6 +78,8 @@ vi.mock("./domain/receiptParsingService", async (importOriginal) => {
   };
 });
 
+const bootstrapProfileMock = vi.mocked(bootstrapProfile);
+
 async function enterPreview(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
     screen.getByRole("button", { name: /Continue in local preview/i })
@@ -86,6 +94,14 @@ async function selectDinnerFriend(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Add Nico" }));
   await user.click(screen.getByRole("button", { name: /Next: add the bill/i }));
 }
+
+const cloudUser: SessionUser = {
+  id: "maya-uid",
+  displayName: "Maya",
+  firstName: "Maya",
+  email: "maya@example.com",
+  photoURL: null
+};
 
 describe("App", () => {
   it("shows a welcome screen before entering local preview", () => {
@@ -226,5 +242,35 @@ describe("App", () => {
 
     expect(screen.getByRole("heading", { name: /Dinners in motion/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Nico/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a retryable profile error instead of loading forever", async () => {
+    bootstrapProfileMock.mockRejectedValueOnce(new Error("Profile bootstrap failed."));
+
+    render(
+      <App
+        cloudConfigured
+        allowLocalPreview={false}
+        authAdapter={{
+          observeSession: (listener) => {
+            listener(cloudUser);
+            return () => undefined;
+          },
+          getIdToken: vi.fn().mockResolvedValue("token"),
+          signInWithGoogle: vi.fn(),
+          signInWithEmail: vi.fn(),
+          createEmailAccount: vi.fn(),
+          signOutUser: vi.fn()
+        }}
+      />
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "We couldn't open your profile" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Profile bootstrap failed.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(screen.queryByText("Opening SplitSnap...")).not.toBeInTheDocument();
   });
 });

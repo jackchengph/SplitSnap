@@ -17,7 +17,7 @@ import {
   observeForegroundMessages,
   requestPushPermission
 } from "./services/notificationClient";
-import type { SessionUser } from "./services/authService";
+import type { AuthAdapter, SessionUser } from "./services/authService";
 import type { UserProfile } from "./domain/accountTypes";
 
 type FlowStep =
@@ -288,6 +288,38 @@ export function SplitSnapApp() {
     );
   }
 
+  if (session.profileStatus === "error") {
+    return (
+      <main className="auth-shell">
+        <section className="auth-panel">
+          <div className="auth-brand">S</div>
+          <p className="eyebrow">SplitSnap</p>
+          <h1>We couldn't open your profile</h1>
+          <p className="notice warning">
+            {session.error || "Profile could not be created."}
+          </p>
+          <p>Try again, or sign out and use another account.</p>
+          <div className="button-row">
+            <button
+              type="button"
+              className="google-sign-in"
+              onClick={() => void session.retryProfile()}
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void session.signOut()}
+            >
+              Sign out
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   if (!session.profile || session.profileStatus !== "ready") {
     return <main className="loading-shell">Opening SplitSnap...</main>;
   }
@@ -308,6 +340,7 @@ interface AppProps {
   cloudConfigured?: boolean;
   allowLocalPreview?: boolean;
   autoEnterLocalPreview?: boolean;
+  authAdapter?: AuthAdapter;
 }
 
 export default function App({
@@ -315,13 +348,15 @@ export default function App({
     ? false
     : firebaseRuntime.configured,
   allowLocalPreview = import.meta.env.DEV || !cloudConfigured,
-  autoEnterLocalPreview = import.meta.env.PROD && !cloudConfigured
+  autoEnterLocalPreview = import.meta.env.PROD && !cloudConfigured,
+  authAdapter
 }: AppProps = {}) {
   return (
     <SessionProvider
       cloudConfigured={cloudConfigured}
       allowLocalPreview={allowLocalPreview}
       autoEnterLocalPreview={autoEnterLocalPreview}
+      authAdapter={authAdapter}
     >
       <SplitSnapApp />
     </SessionProvider>
