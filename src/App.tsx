@@ -15,7 +15,8 @@ import { SplitReviewPage } from "./components/SplitReviewPage";
 import { firebaseRuntime } from "./platform/firebase";
 import {
   observeForegroundMessages,
-  requestPushPermission
+  requestPushPermission,
+  sendTestPushNotification
 } from "./services/notificationClient";
 import type { AuthAdapter, SessionUser } from "./services/authService";
 import type { UserProfile } from "./domain/accountTypes";
@@ -242,6 +243,7 @@ function AuthenticatedSplitSnapApp({
           }
           return requestPushPermission(user.id, vapidKey);
         }}
+        onSendTestNotification={sendTestPushNotification}
         onSignOut={onSignOut}
       />
     );

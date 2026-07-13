@@ -88,6 +88,30 @@ describe("/api/notifications/send", () => {
     });
   });
 
+  it("sends a test notification to the signed-in user without requiring a dinner", async () => {
+    vi.mocked(requireUserId).mockResolvedValue("account-a");
+    vi.mocked(sendPushToUser).mockResolvedValue({ sent: 1, failed: 0 });
+    const response = createResponse();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: { test: true }
+      },
+      response
+    );
+
+    expect(response.code).toBe(200);
+    expect(sendPushToUser).toHaveBeenCalledWith({
+      userId: "account-a",
+      title: "SplitSnap test notification",
+      body: "Notifications are working on this device.",
+      link: "/?page=profile"
+    });
+    expect(createSupabaseServiceClient).not.toHaveBeenCalled();
+  });
+
   it("blocks reminders addressed to the payer themself", async () => {
     vi.mocked(requireUserId).mockResolvedValue("account-a");
     const response = createResponse();

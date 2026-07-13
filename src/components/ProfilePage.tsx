@@ -9,6 +9,7 @@ interface ProfilePageProps {
   mode: "local" | "cloud";
   notificationReady: boolean;
   onEnableNotifications: () => Promise<NotificationPermission>;
+  onSendTestNotification: () => Promise<void>;
   onSignOut: () => void;
 }
 
@@ -18,6 +19,7 @@ export function ProfilePage({
   mode,
   notificationReady,
   onEnableNotifications,
+  onSendTestNotification,
   onSignOut
 }: ProfilePageProps) {
   const diagnostics = getSystemDiagnostics();
@@ -25,6 +27,9 @@ export function ProfilePage({
     NotificationPermission | "unsupported" | "enabling"
   >(diagnostics.notificationPermission);
   const [notificationError, setNotificationError] = useState("");
+  const [testNotificationStatus, setTestNotificationStatus] = useState<
+    "idle" | "sending" | "sent"
+  >("idle");
 
   async function enableNotifications() {
     setNotificationError("");
@@ -37,6 +42,22 @@ export function ProfilePage({
         caught instanceof Error
           ? caught.message
           : "Notifications could not be enabled."
+      );
+    }
+  }
+
+  async function sendTestNotification() {
+    setNotificationError("");
+    setTestNotificationStatus("sending");
+    try {
+      await onSendTestNotification();
+      setTestNotificationStatus("sent");
+    } catch (caught) {
+      setTestNotificationStatus("idle");
+      setNotificationError(
+        caught instanceof Error
+          ? caught.message
+          : "Test notification could not be sent."
       );
     }
   }
@@ -122,6 +143,21 @@ export function ProfilePage({
             <p className="form-error" role="alert">
               {notificationError}
             </p>
+          ) : null}
+          {notificationStatus === "granted" ? (
+            <button
+              type="button"
+              className="text-command"
+              disabled={testNotificationStatus === "sending"}
+              onClick={() => void sendTestNotification()}
+            >
+              {testNotificationStatus === "sending"
+                ? "Sending test..."
+                : "Send test notification"}
+            </button>
+          ) : null}
+          {testNotificationStatus === "sent" ? (
+            <p className="muted">Test notification sent.</p>
           ) : null}
         </article>
       </section>

@@ -11,6 +11,7 @@ interface ReminderBody {
   participantId?: unknown;
   title?: unknown;
   body?: unknown;
+  test?: unknown;
 }
 
 export default async function handler(request: ApiRequest, response: ApiResponse) {
@@ -21,7 +22,22 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
   try {
     const callerId = await requireUserId(request);
-    const { expenseId, participantId, title, body } = (request.body || {}) as ReminderBody;
+    const { expenseId, participantId, title, body, test } = (request.body || {}) as ReminderBody;
+    if (test === true) {
+      const result = await sendPushToUser({
+        userId: callerId,
+        title: "SplitSnap test notification",
+        body: "Notifications are working on this device.",
+        link: "/?page=profile"
+      });
+      if (result.sent === 0) {
+        response.status(409).json({ error: "This account has no push-enabled device." });
+        return;
+      }
+      response.status(200).json({ sent: result.sent, failed: result.failed });
+      return;
+    }
+
     if (!expenseId || !participantId || !title || !body) {
       response.status(400).json({ error: "Missing reminder fields." });
       return;

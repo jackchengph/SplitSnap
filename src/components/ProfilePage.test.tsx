@@ -35,6 +35,7 @@ describe("ProfilePage", () => {
         mode="cloud"
         notificationReady
         onEnableNotifications={onEnableNotifications}
+        onSendTestNotification={vi.fn()}
         onSignOut={vi.fn()}
       />
     );
@@ -49,6 +50,33 @@ describe("ProfilePage", () => {
     ).toBeEnabled();
   });
 
+  it("sends a test notification after push is enabled", async () => {
+    const browserUser = userEvent.setup();
+    const onSendTestNotification = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ProfilePage
+        user={user}
+        profile={profile}
+        mode="cloud"
+        notificationReady
+        onEnableNotifications={vi.fn().mockResolvedValue("granted")}
+        onSendTestNotification={onSendTestNotification}
+        onSignOut={vi.fn()}
+      />
+    );
+
+    await browserUser.click(
+      screen.getByRole("button", { name: "Enable notifications" })
+    );
+    await browserUser.click(
+      await screen.findByRole("button", { name: "Send test notification" })
+    );
+
+    expect(onSendTestNotification).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Test notification sent.")).toBeInTheDocument();
+  });
+
   it("does not pretend push is available in local preview", () => {
     render(
       <ProfilePage
@@ -57,6 +85,7 @@ describe("ProfilePage", () => {
         mode="local"
         notificationReady={false}
         onEnableNotifications={vi.fn()}
+        onSendTestNotification={vi.fn()}
         onSignOut={vi.fn()}
       />
     );
@@ -74,6 +103,7 @@ describe("ProfilePage", () => {
         mode="cloud"
         notificationReady
         onEnableNotifications={vi.fn()}
+        onSendTestNotification={vi.fn()}
         onSignOut={vi.fn()}
       />
     );
