@@ -55,9 +55,18 @@ function createFirestoreHarness(seed: Record<string, StoredDoc> = {}) {
       }) => Promise<T>
     ) => {
       const pending = new Map<string, StoredDoc>();
+      let hasWritten = false;
       const result = await callback({
-        get: async (ref) => createSnapshot(pending.get(ref.path) ?? store.get(ref.path)),
+        get: async (ref) => {
+          if (hasWritten) {
+            throw new Error(
+              "Firestore transactions require all reads to be executed before all writes."
+            );
+          }
+          return createSnapshot(store.get(ref.path));
+        },
         set: (ref, value) => {
+          hasWritten = true;
           pending.set(ref.path, clone(value));
         }
       });

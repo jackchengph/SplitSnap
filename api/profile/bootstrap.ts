@@ -229,17 +229,18 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         });
 
         let claimedHandle = "";
+        let claimedHandleRef: ReturnType<typeof firestore.doc> | null = null;
         for (const candidate of handleOptions) {
           const handleRef = firestore.doc(`handles/${candidate}`);
           const snapshot = await transaction.get(handleRef);
           const claim = snapshot.data() as HandleClaim | undefined;
           if (isClaimAvailable(claim, snapshot.exists, uid)) {
             claimedHandle = candidate;
-            transaction.set(handleRef, { userId: uid });
+            claimedHandleRef = handleRef;
             break;
           }
         }
-        if (!claimedHandle) {
+        if (!claimedHandle || !claimedHandleRef) {
           throw new Error("No handle is currently available.");
         }
 
@@ -255,17 +256,18 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         });
 
         let claimedFriendCode = "";
+        let claimedFriendCodeRef: ReturnType<typeof firestore.doc> | null = null;
         for (const candidate of friendCodeOptions) {
           const friendCodeRef = firestore.doc(`friendCodes/${candidate}`);
           const snapshot = await transaction.get(friendCodeRef);
           const claim = snapshot.data() as FriendCodeClaim | undefined;
           if (isClaimAvailable(claim, snapshot.exists, uid)) {
             claimedFriendCode = candidate;
-            transaction.set(friendCodeRef, { userId: uid });
+            claimedFriendCodeRef = friendCodeRef;
             break;
           }
         }
-        if (!claimedFriendCode) {
+        if (!claimedFriendCode || !claimedFriendCodeRef) {
           throw new Error("No friend code is currently available.");
         }
 
@@ -284,6 +286,8 @@ export default async function handler(request: ApiRequest, response: ApiResponse
           createdAt: readString(existingData?.createdAt) ?? now,
           updatedAt: now
         });
+        transaction.set(claimedHandleRef, { userId: uid });
+        transaction.set(claimedFriendCodeRef, { userId: uid });
         transaction.set(userRef, profile);
         transaction.set(publicProfileRef, createPublicProfile(profile));
         return profile;
