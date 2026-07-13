@@ -14,6 +14,8 @@ interface AppShellProps {
   currentPage: AppPage;
   userName: string;
   sessionMode: "local" | "cloud";
+  friendBadgeCount?: number;
+  activityBadgeCount?: number;
   onNavigate: (page: AppPage) => void;
 }
 
@@ -29,8 +31,19 @@ export function AppShell({
   currentPage,
   userName,
   sessionMode,
+  friendBadgeCount = 0,
+  activityBadgeCount = 0,
   onNavigate
 }: AppShellProps) {
+  const badgeCountFor = (page: AppPage) => {
+    if (page === "friends") return friendBadgeCount;
+    if (page === "activity") return activityBadgeCount;
+    return 0;
+  };
+
+  const labelFor = (label: string, count: number) =>
+    count > 0 ? `${label}, ${count} pending` : label;
+
   return (
     <div className="product-shell">
       <aside className="side-rail" aria-label="Primary navigation">
@@ -47,12 +60,17 @@ export function AppShell({
             <button
               type="button"
               key={page}
-              aria-label={label}
+              aria-label={labelFor(label, badgeCountFor(page))}
               aria-current={page === currentPage ? "page" : undefined}
               onClick={() => onNavigate(page)}
             >
               <Icon aria-hidden="true" size={20} />
               <span>{label}</span>
+              {badgeCountFor(page) > 0 ? (
+                <span className="nav-badge" aria-hidden="true">
+                  {badgeCountFor(page)}
+                </span>
+              ) : null}
             </button>
           ))}
         </nav>
@@ -69,10 +87,15 @@ export function AppShell({
             <button
               type="button"
               className="icon-button"
-              aria-label="Open meals and reminders"
+              aria-label={labelFor("Open meals and reminders", activityBadgeCount)}
               onClick={() => onNavigate("activity")}
             >
               <Bell aria-hidden="true" size={19} />
+              {activityBadgeCount > 0 ? (
+                <span className="nav-badge bell-badge" aria-hidden="true">
+                  {activityBadgeCount}
+                </span>
+              ) : null}
             </button>
             <span className="account-avatar">{userName.slice(0, 1).toUpperCase()}</span>
           </div>
@@ -85,12 +108,17 @@ export function AppShell({
           <button
             type="button"
             key={page}
-            aria-label={label}
+            aria-label={labelFor(label, badgeCountFor(page))}
             aria-current={page === currentPage ? "page" : undefined}
             onClick={() => onNavigate(page)}
           >
             <Icon aria-hidden="true" size={20} />
             <span>{label}</span>
+            {badgeCountFor(page) > 0 ? (
+              <span className="nav-badge" aria-hidden="true">
+                {badgeCountFor(page)}
+              </span>
+            ) : null}
           </button>
         ))}
       </nav>

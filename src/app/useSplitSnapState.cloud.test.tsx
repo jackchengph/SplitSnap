@@ -145,9 +145,49 @@ describe("useSplitSnapState cloud mode", () => {
 
     expect(result.current.connectedFriendIds).toEqual(["friend-uid"]);
     expect(result.current.selectedDinnerFriendIds).toEqual([]);
+    expect(result.current.group.participantIds).toEqual(["current-uid"]);
     expect(result.current.friends.find((friend) => friend.id === "friend-uid")?.name).toBe(
       "Nico Santos"
     );
+  });
+
+  it("keeps connected friends out of manual receipt splits until the payer adds them", async () => {
+    const currentUser = {
+      id: "current-uid",
+      displayName: "Maya Cruz",
+      firstName: "Maya",
+      email: "maya@example.com",
+      photoURL: null
+    };
+
+    const { result } = renderHook(() =>
+      useSplitSnapState({
+        cloudMode: true,
+        currentUser
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.connectedFriendIds).toEqual(["friend-uid"]);
+    });
+
+    act(() => {
+      result.current.useManualReceipt();
+    });
+
+    expect(result.current.receipt.items[0].assignedParticipantIds).toEqual([
+      "current-uid"
+    ]);
+    expect(result.current.split.results).toEqual([]);
+
+    act(() => {
+      result.current.addDinnerFriend("friend-uid");
+    });
+
+    expect(result.current.group.participantIds).toEqual([
+      "current-uid",
+      "friend-uid"
+    ]);
   });
 
   it("only lets accepted friends be added to a dinner", async () => {
@@ -203,7 +243,7 @@ describe("useSplitSnapState cloud mode", () => {
     });
 
     act(() => {
-      result.current.connectFriend("friend-uid");
+      result.current.addDinnerFriend("friend-uid");
     });
 
     await waitFor(() => {
@@ -259,7 +299,10 @@ describe("useSplitSnapState cloud mode", () => {
     });
 
     act(() => {
-      result.current.connectFriend("friend-uid");
+      result.current.addDinnerFriend("friend-uid");
+    });
+
+    act(() => {
       result.current.useManualReceipt();
     });
 
@@ -302,7 +345,7 @@ describe("useSplitSnapState cloud mode", () => {
     });
 
     act(() => {
-      result.current.connectFriend("friend-uid");
+      result.current.addDinnerFriend("friend-uid");
     });
 
     await waitFor(() => {

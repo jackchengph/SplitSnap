@@ -202,10 +202,13 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
   const [cloudExpenses, setCloudExpenses] = useState<CloudExpenseDocument[]>([]);
   const [activeCloudPayerId, setActiveCloudPayerId] = useState(payerId);
   const activeGroup = useMemo(() => {
-    const dinnerFriendIds =
-      selectedDinnerFriendIds.length > 0 ? selectedDinnerFriendIds : connectedFriendIds;
+    const dinnerFriendIds = isCloudMode
+      ? selectedDinnerFriendIds
+      : selectedDinnerFriendIds.length > 0
+        ? selectedDinnerFriendIds
+        : connectedFriendIds;
     return buildGroup([activeCloudPayerId, ...dinnerFriendIds], activeCloudPayerId);
-  }, [activeCloudPayerId, connectedFriendIds, selectedDinnerFriendIds]);
+  }, [activeCloudPayerId, connectedFriendIds, isCloudMode, selectedDinnerFriendIds]);
   const split = useMemo(() => calculateSplit(receipt, activeGroup, statuses), [activeGroup, receipt, statuses]);
   const usedTransactionNumbers = useMemo(
     () =>

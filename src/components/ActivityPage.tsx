@@ -8,6 +8,7 @@ interface ActivityPageProps {
   split: SplitSummary;
   cloudExpenses: CloudExpenseDocument[];
   currentUserId: string;
+  showDraftActivity?: boolean;
   onOpenParticipant: (participantId: string) => void;
   onOpenExpense: (expenseId: string, participantId: string) => void;
 }
@@ -17,6 +18,7 @@ export function ActivityPage({
   split,
   cloudExpenses,
   currentUserId,
+  showDraftActivity = true,
   onOpenParticipant,
   onOpenExpense
 }: ActivityPageProps) {
@@ -78,7 +80,9 @@ export function ActivityPage({
       <section className="activity-section">
         <h2>Owed to you</h2>
         <div className="activity-list">
-          {(owedToYou.length > 0 ? owedToYou : [{ expense: null, summary: split }]).flatMap(({ expense, summary }) =>
+          {(owedToYou.length > 0 || !showDraftActivity
+            ? owedToYou
+            : [{ expense: null, summary: split }]).flatMap(({ expense, summary }) =>
             summary.results.map((result) => {
               const friend = friendById.get(result.participantId);
               const key = expense ? `${expense.id}-${result.participantId}` : result.participantId;
@@ -103,6 +107,9 @@ export function ActivityPage({
             );
             })
           )}
+          {owedToYou.length === 0 && (!showDraftActivity || split.results.length === 0) ? (
+            <p className="muted">No one owes you from a saved dinner yet.</p>
+          ) : null}
         </div>
       </section>
     </main>

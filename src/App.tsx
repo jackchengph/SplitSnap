@@ -51,6 +51,27 @@ function AuthenticatedSplitSnapApp({
   const activeSplit = state.split.results.find(
     (result) => result.participantId === state.activeParticipantId
   );
+  const incomingFriendRequestCount = state.friendEntries.filter(
+    (entry) => entry.direction === "incoming"
+  ).length;
+  const activityBadgeCount = state.cloudExpenses.reduce((total, expense) => {
+    const userIsPayer = expense.payerId === user.id;
+    const userIsParticipant = expense.participantIds.includes(user.id);
+    if (!userIsPayer && !userIsParticipant) {
+      return total;
+    }
+
+    const openParticipantCount = expense.participantIds.filter((participantId) => {
+      if (participantId === expense.payerId) {
+        return false;
+      }
+      if (expense.statuses?.[participantId] === "paid") {
+        return false;
+      }
+      return userIsPayer || participantId === user.id;
+    }).length;
+    return total + openParticipantCount;
+  }, 0);
   const activePayerName =
     state.friends.find((friend) => friend.id === state.group.payerId)?.name ||
     user.firstName;
@@ -214,6 +235,7 @@ function AuthenticatedSplitSnapApp({
         split={state.split}
         cloudExpenses={state.cloudExpenses}
         currentUserId={user.id}
+        showDraftActivity={sessionMode !== "cloud"}
         onOpenParticipant={(participantId) => {
           state.setActiveParticipantId(participantId);
           setFlowStep("participant");
@@ -265,6 +287,8 @@ function AuthenticatedSplitSnapApp({
       currentPage={currentPage}
       userName={user.firstName}
       sessionMode={sessionMode}
+      friendBadgeCount={incomingFriendRequestCount}
+      activityBadgeCount={activityBadgeCount}
       onNavigate={navigate}
     >
       {content}

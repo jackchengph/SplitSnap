@@ -33,4 +33,26 @@ describe("AppShell", () => {
       within(desktopNavigation).getByRole("button", { name: "Home" })
     ).toHaveAttribute("aria-current", "page");
   });
+
+  it("shows in-app badges for friend requests and open meals", () => {
+    render(
+      <AppShell
+        currentPage="home"
+        userName="Maya"
+        sessionMode="cloud"
+        friendBadgeCount={2}
+        activityBadgeCount={3}
+        onNavigate={vi.fn()}
+      >
+        <p>Page content</p>
+      </AppShell>
+    );
+
+    const desktopNavigation = screen.getByRole("navigation", {
+      name: "Desktop navigation"
+    });
+    expect(within(desktopNavigation).getByLabelText("Friends, 2 pending")).toBeInTheDocument();
+    expect(within(desktopNavigation).getByLabelText("Meals, 3 pending")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open meals and reminders, 3 pending" })).toBeInTheDocument();
+  });
 });

@@ -34,6 +34,22 @@ const emptySplit: SplitSummary = {
   calculatedTotal: 0
 };
 
+const draftSplit: SplitSummary = {
+  ...emptySplit,
+  results: [
+    {
+      participantId: "debtor-b",
+      itemShares: [{ itemId: "draft-item", itemName: "Draft pasta", share: 500 }],
+      subtotal: 500,
+      taxShare: 0,
+      serviceShare: 0,
+      discountShare: 0,
+      totalOwed: 500,
+      status: "unpaid"
+    }
+  ]
+};
+
 describe("ActivityPage", () => {
   it("shows saved cloud dinners owed by the signed-in participant", () => {
     render(
@@ -66,5 +82,23 @@ describe("ActivityPage", () => {
 
     expect(screen.queryByText("Saturday dinner")).not.toBeInTheDocument();
     expect(screen.getByText("No dinners from other people yet.")).toBeInTheDocument();
+  });
+
+  it("does not show unsaved draft splits in cloud activity", () => {
+    render(
+      <ActivityPage
+        friends={friends}
+        split={draftSplit}
+        cloudExpenses={[]}
+        currentUserId="payer-a"
+        showDraftActivity={false}
+        onOpenParticipant={vi.fn()}
+        onOpenExpense={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Debtor B")).not.toBeInTheDocument();
+    expect(screen.queryByText("PHP 500.00")).not.toBeInTheDocument();
+    expect(screen.getByText("No one owes you from a saved dinner yet.")).toBeInTheDocument();
   });
 });

@@ -1005,6 +1005,7 @@ button:active {
   gap: 5px;
   justify-content: center;
   padding: 9px 4px;
+  position: relative;
 }
 
 .side-rail nav button[aria-current="page"] {
@@ -1060,7 +1061,32 @@ button:active {
   height: 44px;
   justify-content: center;
   padding: 0;
+  position: relative;
   width: 44px;
+}
+
+.nav-badge {
+  align-items: center;
+  background: var(--coral);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.62rem;
+  font-weight: 900;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+  position: absolute;
+  right: 9px;
+  top: 5px;
+}
+
+.bell-badge {
+  border-color: var(--surface);
+  right: -6px;
+  top: -6px;
 }
 
 .account-avatar,
