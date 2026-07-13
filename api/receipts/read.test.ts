@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GeminiConfigurationError, extractReceiptWithGemini } from "../_lib/geminiReceiptClient";
 import { requireUserId } from "../_lib/authenticatedRequest";
 import handler from "./read";
 
 vi.mock("../_lib/authenticatedRequest", () => ({
   requireUserId: vi.fn().mockResolvedValue("payer-uid")
 }));
+
+vi.mock("../_lib/geminiReceiptClient", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../_lib/geminiReceiptClient")>();
+  return { ...original, extractReceiptWithGemini: vi.fn() };
+});
 
 function createResponseRecorder() {
   let statusCode = 200;
@@ -32,52 +38,31 @@ function request(body: unknown, method = "POST") {
 }
 
 describe("POST /api/receipts/read", () => {
-  const originalFetch = globalThis.fetch;
   const originalGeminiKey = process.env.GEMINI_API_KEY;
 
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.GEMINI_API_KEY = "server-secret";
     process.env.GEMINI_MODEL = "";
-    globalThis.fetch = vi.fn();
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
     process.env.GEMINI_API_KEY = originalGeminiKey;
   });
 
-  it("turns model receipt rows into assignable items while filtering summary rows", async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  text: JSON.stringify({
-                    merchantName: "Cara Mia",
-                    date: "2023-05-05",
-                    items: [
-                      { name: "Midnight Dream (Whole)", quantity: 1, unitPrice: 1065, lineTotal: 1065 },
-                      { name: "Sub Total", quantity: 1, unitPrice: 1120, lineTotal: 1120 },
-                      { name: "12% VAT", quantity: 1, unitPrice: 107.52, lineTotal: 107.52 },
-                      { name: "AMOUNT DUE", quantity: 1, unitPrice: 896.01, lineTotal: 896.01 },
-                      { name: "ECO", quantity: 1, unitPrice: 55, lineTotal: 55 }
-                    ],
-                    subtotal: 1120,
-                    tax: 107.52,
-                    total: 896.01,
-                    amountDue: 896.01
-                  })
-                }
-              ]
-            }
-          }
-        ]
-      })
-    } as never);
+  it("turns normalized Gemini extraction into assignable receipt rows", async () => {
+    vi.mocked(extractReceiptWithGemini).mockResolvedValue({
+      merchantName: "Starbucks Coffee",
+      receiptDate: "2026-07-01",
+      currency: "PHP",
+      items: [{ name: "PENNE PESTO", quantity: 1, amount: 205, confidence: 0.96, needsReview: false }],
+      tax: 22,
+      serviceCharge: 0,
+      discount: 0,
+      total: 205,
+      confidence: 0.97,
+      warnings: []
+    });
     const recorder = createResponseRecorder();
 
     await handler(
@@ -93,16 +78,19 @@ describe("POST /api/receipts/read", () => {
       payload: { receipt: { items: Array<{ name: string; quantity: number; price: number }>; total: number; tax: number } };
     };
     expect(statusCode).toBe(200);
+    expect(extractReceiptWithGemini).toHaveBeenCalledWith({
+      mimeType: "image/jpeg",
+      base64Data: "YWJj"
+    });
     expect(payload.receipt.items).toEqual([
-      expect.objectContaining({ name: "Midnight Dream (Whole)", quantity: 1, price: 1065 }),
-      expect.objectContaining({ name: "ECO", quantity: 1, price: 55 })
+      expect.objectContaining({ name: "PENNE PESTO", quantity: 1, price: 205 })
     ]);
-    expect(payload.receipt.total).toBe(896.01);
-    expect(payload.receipt.tax).toBe(107.52);
+    expect(payload.receipt.total).toBe(205);
+    expect(payload.receipt.tax).toBe(22);
   });
 
   it("returns neutral scanner configuration errors", async () => {
-    process.env.GEMINI_API_KEY = "";
+    vi.mocked(extractReceiptWithGemini).mockRejectedValueOnce(new GeminiConfigurationError());
     const recorder = createResponseRecorder();
 
     await handler(

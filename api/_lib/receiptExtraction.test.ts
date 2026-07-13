@@ -85,6 +85,26 @@ describe("normalizeGeminiReceipt", () => {
     expect(result.total).toBe(570);
   });
 
+  it("treats Starbucks-style Total Php as the payable total when Amount Due is absent", () => {
+    const payload = basePayload();
+    payload.merchantName = "Starbucks Coffee";
+    payload.receiptDate = "2026-07-01";
+    payload.rows = [
+      { kind: "item", label: "PENNE PESTO 205 1 205 VA", name: "PENNE PESTO", quantity: 1, amount: 205, confidence: 0.96 },
+      { kind: "item", label: "Total Php 205", name: "Total Php", quantity: null, amount: 205, confidence: 0.98 },
+      { kind: "other", label: "Credit/Debit Car -205", name: null, quantity: null, amount: -205, confidence: 0.96 },
+      { kind: "vat", label: "VATABLE Net.Amt 183 VAT 22 Amount 205", name: "VAT", quantity: null, amount: 22, confidence: 0.95 }
+    ];
+
+    const result = normalizeGeminiReceipt(payload);
+
+    expect(result.items).toEqual([
+      { name: "PENNE PESTO", quantity: 1, amount: 205, confidence: 0.96, needsReview: false }
+    ]);
+    expect(result.total).toBe(205);
+    expect(result.tax).toBe(22);
+  });
+
   it("maps a receipt discount as a positive summary value", () => {
     const payload = basePayload();
     payload.rows.splice(2, 0, {

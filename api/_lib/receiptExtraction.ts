@@ -171,7 +171,7 @@ function parseRow(value: unknown, index: number): ParsedGeminiReceiptRow {
     `rows[${index}].quantity`
   );
   const amount = roundMoney(asFiniteNumber(value.amount, `rows[${index}].amount`));
-  if (amount < 0) {
+  if (amount < 0 && kind !== "other") {
     throw new InvalidGeminiReceiptError(`rows[${index}].amount must not be negative.`);
   }
   const confidence = asConfidence(value.confidence, `rows[${index}].confidence`);
@@ -235,11 +235,13 @@ function semanticRowKind(row: ParsedGeminiReceiptRow): GeminiReceiptRowKind {
     .replace(/^\d+\s*(?:[xX]\s*)?(?=(?:sub|total|amount|vat|service|price|net|zero))/i, "");
 
   if (/\b(?:amount|balance)\s+due\b/i.test(label)) return "amount_due";
+  if (/\b(?:total)\s+(?:php|due|amount)\b/i.test(label)) return "amount_due";
   if (/^(?:sub[\s-]*total|total)\b/i.test(label)) return "subtotal";
   if (/^(?:discount|disc)\b/i.test(label)) return "discount";
   if (/^(?:service\s+(?:charge|fee)|svc\s+charge)\b/i.test(label)) return "service_charge";
+  if (/^(?:12\s*%?\s*)?vat\b/i.test(label) || /\bvat\b.*\bamount\b/i.test(label)) return "vat";
   if (/^(?:vat|tax)\b/i.test(label)) return "vat";
-  if (/^(?:price\s+w\/o|price\s+without|net\s+amount|vatable|vat\s+able|zero[\s-]*rated)\b/i.test(label)) {
+  if (/^(?:price\s+w\/o|price\s+without|net\s+amount|vatable|vat\s+able|zero[\s-]*rated|cash|card|credit|debit|payment|settlement)\b/i.test(label)) {
     return "other";
   }
   return row.kind;
