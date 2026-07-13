@@ -33,4 +33,19 @@ describe("prepareReceiptFile", () => {
     expect(convertHeic).not.toHaveBeenCalled();
     expect(result.wasConverted).toBe(false);
   });
+
+  it("keeps a HEIC upload readable when browser conversion fails", async () => {
+    const convertHeic = vi.fn(async () => {
+      throw new Error("Browser cannot decode this HEIC.");
+    });
+    const file = new File([Uint8Array.from(heicBytes()).buffer], "IMG_9974.HEIC", {
+      type: "image/heic"
+    });
+
+    const result = await prepareReceiptFile(file, { convertHeic });
+
+    expect(convertHeic).toHaveBeenCalledOnce();
+    expect(result.wasConverted).toBe(false);
+    expect(result.dataUrl).toMatch(/^data:image\/heic;base64,/);
+  });
 });

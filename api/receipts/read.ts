@@ -24,7 +24,11 @@ interface ReadReceiptResult {
 
 class InvalidReceiptImage extends Error {}
 
-const imageDataUrlPattern = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
+const imageDataUrlPattern =
+  /^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/;
+const heifBrands = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1"]);
+const allowedGeminiMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const heifMimeTypes = new Set(["image/heic", "image/heif", "application/octet-stream"]);
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -36,14 +40,48 @@ function readStringArray(value: unknown): string[] {
     : [];
 }
 
-function readImage(value: string): {
+function isHeifBuffer(buffer: Buffer): boolean {
+  if (buffer.length < 12 || buffer.subarray(4, 8).toString("ascii") !== "ftyp") return false;
+  for (let offset = 8; offset + 4 <= Math.min(buffer.length, 64); offset += 4) {
+    if (heifBrands.has(buffer.subarray(offset, offset + 4).toString("ascii"))) return true;
+  }
+  return false;
+}
+
+async function convertHeicBufferToJpeg(buffer: Buffer): Promise<Buffer> {
+  // @ts-ignore heic-convert does not ship types in Vercel's function compiler.
+  const module = await import("heic-convert");
+  const convert = (module.default || module) as unknown as (options: {
+    buffer: Buffer;
+    format: "JPEG";
+    quality: number;
+  }) => Promise<ArrayBuffer | Buffer | Uint8Array>;
+  const converted = await convert({ buffer, format: "JPEG", quality: 0.74 });
+  if (Buffer.isBuffer(converted)) return converted;
+  if (converted instanceof ArrayBuffer) return Buffer.from(converted);
+  return Buffer.from(converted.buffer, converted.byteOffset, converted.byteLength);
+}
+
+async function readImage(value: string): Promise<{
   mimeType: "image/jpeg" | "image/png" | "image/webp";
   base64Data: string;
-} {
+}> {
   const match = value.match(imageDataUrlPattern);
   if (!match || match[2].length % 4 !== 0) throw new InvalidReceiptImage();
+  const mimeType = match[1].toLowerCase();
+  const buffer = Buffer.from(match[2], "base64");
+
+  if (heifMimeTypes.has(mimeType) || isHeifBuffer(buffer)) {
+    const jpegBuffer = await convertHeicBufferToJpeg(buffer);
+    return {
+      mimeType: "image/jpeg",
+      base64Data: jpegBuffer.toString("base64")
+    };
+  }
+
+  if (!allowedGeminiMimeTypes.has(mimeType)) throw new InvalidReceiptImage();
   return {
-    mimeType: match[1] as "image/jpeg" | "image/png" | "image/webp",
+    mimeType: mimeType as "image/jpeg" | "image/png" | "image/webp",
     base64Data: match[2]
   };
 }
@@ -132,7 +170,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       return;
     }
 
-    const extraction = await extractReceiptWithGemini(readImage(imageDataUrl));
+    const extraction = await extractReceiptWithGemini(await readImage(imageDataUrl));
     const receipt = receiptFromExtraction(extraction, imageDataUrl, participantIds);
     const result: ReadReceiptResult = {
       receipt,

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   GeminiConfigurationError,
   GeminiProviderError,
@@ -26,6 +26,10 @@ function adapterReturning(value: unknown): GeminiAdapter {
 }
 
 describe("extractReceiptWithGemini", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("sends an inline image with structured JSON output and normalizes the response", async () => {
     const adapter = adapterReturning(validModelPayload());
 
@@ -104,6 +108,26 @@ describe("extractReceiptWithGemini", () => {
         { apiKey: "server-secret", adapter }
       )
     ).rejects.toBeInstanceOf(GeminiProviderError);
+  });
+
+  it("times out slow provider responses without exposing receipt data", async () => {
+    vi.useFakeTimers();
+    const adapter: GeminiAdapter = {
+      generateContent: vi.fn(() => new Promise<{ text?: string }>(() => undefined))
+    };
+
+    const promise = expect(
+      extractReceiptWithGemini(
+        { mimeType: "image/jpeg", base64Data: "private-receipt-base64" },
+        { apiKey: "server-secret", adapter, timeoutMs: 1 }
+      )
+    ).rejects.toEqual(expect.objectContaining({
+      name: "GeminiProviderError",
+      message: "Gemini receipt extraction failed."
+    }));
+
+    await vi.advanceTimersByTimeAsync(1);
+    await promise;
   });
 
   it("exports distinct typed provider failures", () => {

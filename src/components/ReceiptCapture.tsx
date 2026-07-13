@@ -38,7 +38,7 @@ export function ReceiptCapture({
         Upload receipt image
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif,image/heic,image/heif"
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) {

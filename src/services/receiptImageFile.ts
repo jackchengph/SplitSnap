@@ -45,9 +45,19 @@ export async function prepareReceiptFile(
   const heif = await isHeif(file);
   if (!heif && !file.type.startsWith("image/")) throw new Error("Choose a receipt image file.");
 
-  const image = heif ? await (options.convertHeic ?? convertHeicToJpeg)(file) : file;
+  let image: Blob = file;
+  let wasConverted = false;
+  if (heif) {
+    try {
+      image = await (options.convertHeic ?? convertHeicToJpeg)(file);
+      wasConverted = true;
+    } catch {
+      image = file;
+    }
+  }
+
   return {
     dataUrl: (await readBlob(image, "data-url")) as string,
-    wasConverted: heif
+    wasConverted
   };
 }

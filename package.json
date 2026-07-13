@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "^2.110.2",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.0.0",
+    "heic-convert": "^2.1.0",
     "heic2any": "^0.0.4",
     "lucide-react": "^1.21.0",
     "react": "^19.0.0",

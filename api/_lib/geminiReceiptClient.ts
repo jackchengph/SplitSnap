@@ -65,6 +65,7 @@ interface GeminiReceiptInput {
 interface GeminiReceiptOptions {
   apiKey?: string;
   adapter?: GeminiAdapter;
+  timeoutMs?: number;
 }
 
 export class GeminiConfigurationError extends Error {
@@ -103,6 +104,20 @@ function createAdapter(apiKey: string): GeminiAdapter {
   };
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new GeminiProviderError()), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 export async function extractReceiptWithGemini(
   input: GeminiReceiptInput,
   options: GeminiReceiptOptions = {}
@@ -111,18 +126,22 @@ export async function extractReceiptWithGemini(
   if (!apiKey.trim()) throw new GeminiConfigurationError();
 
   const adapter = options.adapter ?? createAdapter(apiKey);
+  const timeoutMs = options.timeoutMs ?? 25_000;
   try {
-    const response = await adapter.generateContent({
-      model,
-      contents: [
-        { inlineData: { mimeType: input.mimeType, data: input.base64Data } },
-        { text: receiptPrompt }
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: receiptSchema
-      }
-    });
+    const response = await withTimeout(
+      adapter.generateContent({
+        model,
+        contents: [
+          { inlineData: { mimeType: input.mimeType, data: input.base64Data } },
+          { text: receiptPrompt }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseJsonSchema: receiptSchema
+        }
+      }),
+      timeoutMs
+    );
 
     if (!response.text) throw new GeminiProviderError();
     let payload: unknown;
