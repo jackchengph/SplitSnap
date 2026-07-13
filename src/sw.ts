@@ -34,10 +34,17 @@ if (firebaseConfig) {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const link =
+    typeof event.notification.data?.link === "string"
+      ? event.notification.data.link
+      : "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       const existing = clients[0] as WindowClient | undefined;
-      return existing ? existing.focus() : self.clients.openWindow("/");
+      if (!existing) {
+        return self.clients.openWindow(link);
+      }
+      return existing.navigate(link).then((client) => (client ?? existing).focus());
     })
   );
 });

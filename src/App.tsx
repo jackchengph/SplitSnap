@@ -16,6 +16,7 @@ import { firebaseRuntime } from "./platform/firebase";
 import {
   observeForegroundMessages,
   requestPushPermission,
+  showForegroundPushNotification,
   sendTestPushNotification
 } from "./services/notificationClient";
 import type { AuthAdapter, SessionUser } from "./services/authService";
@@ -83,15 +84,7 @@ function AuthenticatedSplitSnapApp({
 
     let unsubscribe = () => {};
     void observeForegroundMessages((payload) => {
-      const title = payload.data?.title || payload.notification?.title;
-      if (!title || !("Notification" in window) || Notification.permission !== "granted") {
-        return;
-      }
-
-      new Notification(title, {
-        body: payload.data?.body || payload.notification?.body,
-        icon: "/icons/icon-192.png"
-      });
+      void showForegroundPushNotification(payload);
     }).then((nextUnsubscribe) => {
       unsubscribe = nextUnsubscribe;
     });

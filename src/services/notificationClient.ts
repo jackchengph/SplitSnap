@@ -8,6 +8,17 @@ interface PushPermissionOptions {
 
 function friendlyMessagingError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
+  const lowerMessage = message.toLowerCase();
+  if (
+    lowerMessage.includes("permission denied") ||
+    message.includes("Push API") ||
+    lowerMessage.includes("not support the push api")
+  ) {
+    return new Error(
+      "Chrome does not support web push in private/incognito windows. Open SplitSnap in a regular browser window, then enable notifications again."
+    );
+  }
+
   if (
     message.includes("messaging/token-subscribe-failed") ||
     message.includes("Request is missing required authentication credential")
@@ -107,6 +118,35 @@ export async function observeForegroundMessages(
 ): Promise<() => void> {
   const messaging = await firebaseRuntime.getMessaging();
   return messaging ? onMessage(messaging, listener) : () => undefined;
+}
+
+export async function showForegroundPushNotification(
+  payload: MessagePayload
+): Promise<void> {
+  const title = payload.data?.title || payload.notification?.title;
+  if (!title || !("Notification" in window) || Notification.permission !== "granted") {
+    return;
+  }
+
+  const body = payload.data?.body || payload.notification?.body || "";
+  const link = payload.data?.link || "/?page=activity";
+  if ("serviceWorker" in navigator) {
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification(title, {
+      body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { link },
+      tag: title
+    });
+    return;
+  }
+
+  new Notification(title, {
+    body,
+    icon: "/icons/icon-192.png",
+    data: { link }
+  });
 }
 
 export async function sendPushReminder(input: {

@@ -4,6 +4,7 @@ import { firebaseRuntime } from "../platform/firebase";
 import { saveDeviceToken } from "./cloudWorkspace";
 import {
   requestPushPermission,
+  showForegroundPushNotification,
   sendTestPushNotification
 } from "./notificationClient";
 
@@ -82,6 +83,18 @@ describe("notificationClient", () => {
     expect(getToken).not.toHaveBeenCalled();
   });
 
+  it("explains private browsing push registration failures", async () => {
+    installNotification("granted");
+    vi.mocked(getToken).mockRejectedValue(
+      new Error("Registration failed - permission denied")
+    );
+
+    await expect(
+      requestPushPermission("user-1", "vapid-key", { permissionTimeoutMs: 50 })
+    ).rejects.toThrow("private/incognito");
+    expect(saveDeviceToken).not.toHaveBeenCalled();
+  });
+
   it("sends a test notification to the signed-in device owner", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
@@ -97,6 +110,34 @@ describe("notificationClient", () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ test: true })
+    });
+  });
+
+  it("shows foreground push messages through the service worker registration", async () => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        ready: Promise.resolve({ showNotification })
+      }
+    });
+    vi.stubGlobal("Notification", {
+      permission: "granted"
+    });
+
+    await showForegroundPushNotification({
+      data: {
+        title: "Payment reminder",
+        body: "Open Activity to view your balance.",
+        link: "/?page=activity"
+      }
+    } as never);
+
+    expect(showNotification).toHaveBeenCalledWith("Payment reminder", {
+      body: "Open Activity to view your balance.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { link: "/?page=activity" },
+      tag: "Payment reminder"
     });
   });
 });

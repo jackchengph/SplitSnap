@@ -51,6 +51,13 @@ function throwIfSupabaseError(result: SupabaseMutationResult): void {
   }
 }
 
+function isDisposablePushTestProfile(profile: SupabaseProfileRow): boolean {
+  return (
+    profile.display_name.toLowerCase().startsWith("splitsnap.push.") ||
+    profile.handle.toLowerCase().startsWith("splitsnap_push_")
+  );
+}
+
 export async function upsertSupabaseProfile(
   client: SupabaseMutationClientLike,
   profile: UserProfile
@@ -83,5 +90,5 @@ export async function listSupabaseProfiles(
   if (result.error) {
     throw new Error(result.error.message || "Supabase profile request failed.");
   }
-  return result.data ?? [];
+  return (result.data ?? []).filter((profile) => !isDisposablePushTestProfile(profile));
 }

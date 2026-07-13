@@ -111,7 +111,8 @@ async function sendFcmMessage(input: {
         data: {
           expenseId: input.expenseId ?? "",
           title: input.title,
-          body: input.body
+          body: input.body,
+          link: input.link ?? "/?page=activity"
         }
       }
     })
