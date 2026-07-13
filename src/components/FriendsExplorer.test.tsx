@@ -114,20 +114,30 @@ describe("FriendsExplorer", () => {
     expect(props.onAddDinnerFriend).toHaveBeenCalledWith("nico");
     expect(props.onRequestFriend).not.toHaveBeenCalledWith("nico");
 
+    expect(screen.getByRole("heading", { name: "Friend requests" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Requested" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Add Bea to dinner" })).not.toBeInTheDocument();
   });
 
-  it("lets users send, accept, and reject friend requests from Explore", async () => {
+  it("keeps pending requests out of Explore while letting users accept or reject them", async () => {
     const user = userEvent.setup();
     const props = renderExplorer({
       friends: [maya, nico, bea, enzo, { ...bea, id: "lia", name: "Lia", avatarLabel: "L" }]
     });
 
+    const requestPanel = screen.getByRole("region", { name: "Friend requests" });
+    expect(within(requestPanel).getByText("Bea")).toBeInTheDocument();
+    expect(within(requestPanel).getByText("Enzo")).toBeInTheDocument();
+
+    const explorePanel = screen.getByRole("region", { name: "Explore people" });
+    expect(within(explorePanel).queryByText("Bea")).not.toBeInTheDocument();
+    expect(within(explorePanel).queryByText("Enzo")).not.toBeInTheDocument();
+    expect(within(explorePanel).getByText("Lia")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Add Lia as friend" }));
     expect(props.onRequestFriend).toHaveBeenCalledWith("lia");
 
-    const enzoCard = screen.getByText("Enzo").closest("article");
+    const enzoCard = within(requestPanel).getByText("Enzo").closest("article");
     expect(enzoCard).not.toBeNull();
     await user.click(within(enzoCard as HTMLElement).getByRole("button", { name: "Accept" }));
     expect(props.onAcceptFriend).toHaveBeenCalledWith("enzo__maya");

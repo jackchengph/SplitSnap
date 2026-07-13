@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Friend } from "../domain/types";
 import type { FriendListEntry } from "../services/friendRepository";
 
@@ -28,7 +29,6 @@ export function FriendsExplorer({
   onDeclineFriend,
   onAddDinnerFriend,
   onRemoveDinnerFriend,
-  onRemove,
   onNext,
   onHome
 }: FriendsExplorerProps) {
@@ -44,25 +44,54 @@ export function FriendsExplorer({
     return relationshipByUserId.get(friendId) ?? null;
   }
 
-  function renderExploreAction(friend: Friend) {
+  const connectedFriends = people.filter((friend) => {
     const relationship = relationshipFor(friend.id);
-    const isConnected =
-      connectedFriendIds.includes(friend.id) || relationship?.direction === "connected";
-    const isInDinner = selectedDinnerFriendIds.includes(friend.id);
+    return connectedFriendIds.includes(friend.id) || relationship?.direction === "connected";
+  });
+  const pendingRequestFriends = people.filter((friend) => {
+    const relationship = relationshipFor(friend.id);
+    return relationship?.direction === "incoming" || relationship?.direction === "outgoing";
+  });
+  const exploreFriends = people.filter((friend) => {
+    const relationship = relationshipFor(friend.id);
+    return !relationship && !connectedFriendIds.includes(friend.id);
+  });
 
-    if (isConnected) {
-      return (
-        <button
-          type="button"
-          className="secondary compact-button"
-          onClick={() =>
-            isInDinner ? onRemoveDinnerFriend(friend.id) : onAddDinnerFriend(friend.id)
-          }
+  function renderCard(friend: Friend, detail: string, action: ReactNode) {
+    return (
+      <article className="friend-card" key={friend.id}>
+        <div
+          className="avatar"
+          style={{ backgroundColor: `hsl(${friend.avatarHue} 62% 88%)` }}
         >
-          {isInDinner ? "Remove from dinner" : `Add ${friend.name} to dinner`}
-        </button>
-      );
-    }
+          {friend.avatarLabel}
+        </div>
+        <div>
+          <strong>{friend.name}</strong>
+          <p>{detail}</p>
+        </div>
+        {action}
+      </article>
+    );
+  }
+
+  function renderDinnerAction(friend: Friend) {
+    const isInDinner = selectedDinnerFriendIds.includes(friend.id);
+    return (
+      <button
+        type="button"
+        className="secondary compact-button"
+        onClick={() =>
+          isInDinner ? onRemoveDinnerFriend(friend.id) : onAddDinnerFriend(friend.id)
+        }
+      >
+        {isInDinner ? "Remove from dinner" : `Add ${friend.name} to dinner`}
+      </button>
+    );
+  }
+
+  function renderRequestAction(friend: Friend) {
+    const relationship = relationshipFor(friend.id);
 
     if (relationship?.direction === "outgoing") {
       return (
@@ -92,7 +121,10 @@ export function FriendsExplorer({
         </div>
       );
     }
+    return null;
+  }
 
+  function renderExploreAction(friend: Friend) {
     return (
       <button
         type="button"
@@ -117,7 +149,7 @@ export function FriendsExplorer({
       </header>
 
       <div className="setup-grid">
-        <section className="panel">
+        <section className="panel" aria-label="Dinner draft">
           <div className="section-heading">
             <p className="eyebrow">Dinner draft</p>
             <h2>Added to this meal</h2>
@@ -150,33 +182,59 @@ export function FriendsExplorer({
           </button>
         </section>
 
-        <section className="panel">
+        <section className="panel" aria-label="Your friends">
           <div className="section-heading">
-            <p className="eyebrow">Explore</p>
-            <h2>Add friends</h2>
+            <p className="eyebrow">Friends</p>
+            <h2>Your split circle</h2>
           </div>
           <div className="friend-list">
-            {people.map((friend) => (
-              <article className="friend-card" key={friend.id}>
-                <div className="avatar" style={{ backgroundColor: `hsl(${friend.avatarHue} 62% 88%)` }}>
-                  {friend.avatarLabel}
-                </div>
-                <div>
-                  <strong>{friend.name}</strong>
-                  <p>
-                    {relationshipFor(friend.id)?.direction === "incoming"
-                      ? "Pending friend request"
-                      : relationshipFor(friend.id)?.direction === "outgoing"
-                        ? "Friend request sent"
-                        : connectedFriendIds.includes(friend.id)
-                          ? "Friend"
-                          : `${friend.reliabilityScore}% reliable`}
-                  </p>
-                </div>
-                {renderExploreAction(friend)}
-              </article>
-            ))}
-            {people.length === 0 ? (
+            {connectedFriends.map((friend) =>
+              renderCard(friend, "Friend", renderDinnerAction(friend))
+            )}
+            {connectedFriends.length === 0 ? (
+              <p className="muted">
+                Accepted friends will appear here, ready to add to a dinner.
+              </p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="panel" aria-label="Friend requests">
+          <div className="section-heading">
+            <p className="eyebrow">Requests</p>
+            <h2>Friend requests</h2>
+          </div>
+          <div className="friend-list">
+            {pendingRequestFriends.map((friend) => {
+              const relationship = relationshipFor(friend.id);
+              return renderCard(
+                friend,
+                relationship?.direction === "incoming"
+                  ? "Wants to connect with you"
+                  : "Waiting for them to accept",
+                renderRequestAction(friend)
+              );
+            })}
+            {pendingRequestFriends.length === 0 ? (
+              <p className="muted">No pending friend requests.</p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="panel" aria-label="Explore people">
+          <div className="section-heading">
+            <p className="eyebrow">Explore</p>
+            <h2>Explore people</h2>
+          </div>
+          <div className="friend-list">
+            {exploreFriends.map((friend) =>
+              renderCard(
+                friend,
+                `${friend.reliabilityScore}% reliable`,
+                renderExploreAction(friend)
+              )
+            )}
+            {exploreFriends.length === 0 ? (
               <p className="muted">
                 No other SplitSnap users found yet. Ask a friend to sign in, then refresh this page.
               </p>
