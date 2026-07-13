@@ -43,18 +43,25 @@ describe("ReceiptCapture", () => {
     expect(onReadReceipt).toHaveBeenCalledOnce();
   });
 
-  it("shows receipt read errors passed from the scanner workflow", () => {
+  it("keeps technical scanner details hidden from customers", () => {
     render(
       <ReceiptCapture
-        receipt={{ ...demoReceipt, imageUrl: "data:image/png;base64,abc" }}
-        parseWarnings={["Receipt read failed: Receipt scanning is not configured."]}
+        receipt={{
+          ...demoReceipt,
+          imageUrl: "data:image/png;base64,abc",
+          ocrConfidence: 0.42,
+          parseStatus: "Needs manual review",
+          parseWarnings: ["Receipt scan failed: Receipt scanning is not configured."]
+        }}
         onUpload={vi.fn()}
         onReadReceipt={vi.fn()}
       />
     );
 
-    expect(
-      screen.getByText("Receipt read failed: Receipt scanning is not configured.")
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/OCR confidence/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Receipt scan failed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Receipt read failed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Needs manual review/i)).not.toBeInTheDocument();
+    expect(screen.getByText("6 items ready to review")).toBeInTheDocument();
   });
 });

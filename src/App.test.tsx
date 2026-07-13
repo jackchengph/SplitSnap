@@ -227,7 +227,9 @@ describe("App", () => {
       await screen.findByRole("heading", { level: 1, name: /Captured receipt/i })
     ).toBeInTheDocument();
     expect(screen.getByDisplayValue("New item")).toBeInTheDocument();
-    expect(screen.getByText(/Receipt scan failed: Gemini timed out/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Receipt scan failed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Gemini timed out/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/OCR confidence/i)).not.toBeInTheDocument();
   });
 
   it("opens a participant breakdown from Activity and validates proof", async () => {

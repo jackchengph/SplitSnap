@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ParseStatus } from "../domain/types";
-
 interface ReceiptScannerProps {
-  parseStatus: ParseStatus;
-  parseWarnings: string[];
   onCapture: (imageDataUrl: string) => void | Promise<void>;
   onHome: () => void;
 }
@@ -38,7 +34,7 @@ export function createReceiptCaptureDataUrl(
   return canvas.toDataURL("image/jpeg", captureJpegQuality);
 }
 
-export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }: ReceiptScannerProps) {
+export function ReceiptScanner({ onCapture, onHome }: ReceiptScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -50,7 +46,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
 
     async function startCamera() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraMessage("Camera is unavailable here. You can still use the capture button to test the parsing flow.");
+        setCameraMessage("Camera is unavailable here. You can still continue with a sample receipt.");
         return;
       }
 
@@ -71,7 +67,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
         }
         setCameraMessage("Camera ready");
       } catch {
-        setCameraMessage("Camera permission was denied. Use the capture button when you are ready to continue with a sample scan.");
+        setCameraMessage("Camera permission was denied. Use the capture button when you are ready to continue with a sample receipt.");
       }
     }
 
@@ -99,7 +95,7 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
     <main className="app-shell narrow-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Camera + OCR</p>
+          <p className="eyebrow">Receipt camera</p>
           <h1>Scan receipt</h1>
         </div>
         <button type="button" className="secondary nav-button" onClick={onHome}>
@@ -122,27 +118,13 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
           <div>
             <strong>{cameraMessage}</strong>
             <p className="muted">
-              Align the whole receipt inside the highlighted frame, then capture. Gemini reads the receipt first, and unresolved rows stay editable.
+              Align the whole receipt inside the highlighted frame, then capture. You can review and edit every item before saving.
             </p>
           </div>
           <button type="button" disabled={isCapturing} onClick={() => void captureFrame()}>
             {isCapturing ? "Preparing..." : "Capture receipt"}
           </button>
         </div>
-        <div className="parse-steps" aria-label="Receipt parse status">
-          {["Scanning receipt", "Reading receipt", "Scan failed", "OCR reading items", "Checking unclear areas", "Needs manual review", "Ready to split"].map(
-            (status) => (
-              <span className={parseStatus === status ? "tag active" : "tag"} key={status}>
-                {status}
-              </span>
-            )
-          )}
-        </div>
-        {parseWarnings.map((warning) => (
-          <div className="notice warning" key={warning}>
-            {warning}
-          </div>
-        ))}
       </section>
     </main>
   );

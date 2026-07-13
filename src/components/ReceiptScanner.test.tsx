@@ -11,30 +11,26 @@ describe("ReceiptScanner", () => {
     });
   });
 
-  it.each(["Reading receipt", "Scan failed"] as const)(
-    "shows %s as the active processing stage",
-    async (parseStatus) => {
-      render(
-        <ReceiptScanner
-          parseStatus={parseStatus}
-          parseWarnings={[]}
-          onCapture={vi.fn()}
-          onHome={vi.fn()}
-        />
-      );
-      await screen.findByText(/Camera permission was denied/i);
-      const stage = screen.getByText(parseStatus);
-      expect(stage).toHaveClass("active");
-    }
-  );
+  it("does not expose technical parse stages or warnings", async () => {
+    render(
+      <ReceiptScanner
+        onCapture={vi.fn()}
+        onHome={vi.fn()}
+      />
+    );
+    await screen.findByText(/Camera permission was denied/i);
+
+    expect(screen.queryByText("Scan failed")).not.toBeInTheDocument();
+    expect(screen.queryByText("OCR reading items")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Gemini timed out/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/OCR/i)).not.toBeInTheDocument();
+  });
 
   it("passes a fallback image to the Gemini capture path when the camera is unavailable", async () => {
     const user = userEvent.setup();
     const onCapture = vi.fn();
     render(
       <ReceiptScanner
-        parseStatus="Idle"
-        parseWarnings={[]}
         onCapture={onCapture}
         onHome={vi.fn()}
       />

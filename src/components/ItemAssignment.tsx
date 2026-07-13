@@ -43,19 +43,6 @@ export function ItemAssignment({
                     onChange={(event) => onUpdateName(item.id, event.target.value)}
                   />
                 </label>
-                <p>Confidence {Math.round(item.confidence * 100)}%</p>
-                <div className="tag-row">
-                  {item.parseSource ? (
-                    <span className={item.needsReview ? "tag warning-tag" : "tag"}>
-                      {item.parseSource === "yolo"
-                        ? "YOLO fallback"
-                        : item.parseSource === "manual"
-                          ? "Manual review"
-                          : "OCR"}
-                    </span>
-                  ) : null}
-                  {item.needsReview ? <span className="tag warning-tag">Check price/name</span> : null}
-                </div>
               </div>
               <div className="item-number-fields">
                 <label className="price-input">

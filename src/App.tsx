@@ -148,8 +148,6 @@ function AuthenticatedSplitSnapApp({
   } else if (flowStep === "scanner") {
     content = (
       <ReceiptScanner
-        parseStatus={state.parseStatus}
-        parseWarnings={state.parseWarnings}
         onCapture={async (imageDataUrl) => {
           await state.captureReceipt(imageDataUrl);
           setFlowStep("review");
@@ -167,7 +165,6 @@ function AuthenticatedSplitSnapApp({
         notifications={state.notifications}
         paymentProofs={state.paymentProofs}
         payerName={activePayerName}
-        parseWarnings={state.parseWarnings}
         onHome={goHome}
         onSaveDinner={state.saveDinner}
         isReadingUploadedReceipt={state.isReadingUploadedReceipt}

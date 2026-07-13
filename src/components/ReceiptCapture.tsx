@@ -3,7 +3,6 @@ import type { Receipt } from "../domain/types";
 interface ReceiptCaptureProps {
   receipt: Receipt;
   isReadingReceipt?: boolean;
-  parseWarnings?: string[];
   onUpload: (fileName: string, imageDataUrl: string) => void;
   onReadReceipt: () => void;
 }
@@ -20,16 +19,10 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export function ReceiptCapture({
   receipt,
   isReadingReceipt = false,
-  parseWarnings = [],
   onUpload,
   onReadReceipt
 }: ReceiptCaptureProps) {
-  const lowConfidence =
-    receipt.ocrConfidence < 0.85 || receipt.items.some((item) => item.needsReview);
   const canReadReceipt = Boolean(receipt.imageUrl) && !isReadingReceipt;
-  const visibleWarnings = [...(receipt.parseWarnings ?? []), ...parseWarnings].filter(
-    (warning, index, warnings) => warnings.indexOf(warning) === index
-  );
 
   return (
     <section className="panel">
@@ -45,10 +38,7 @@ export function ReceiptCapture({
           <strong>{receipt.merchantName}</strong>
           <span>{receipt.date}</span>
         </div>
-        <p>
-          {receipt.items.length} parsed items
-          {receipt.parseStatus ? ` · ${receipt.parseStatus}` : ""}
-        </p>
+        <p>{receipt.items.length} items ready to review</p>
       </div>
       <label className="upload-control">
         Upload receipt image
@@ -73,17 +63,6 @@ export function ReceiptCapture({
       >
         {isReadingReceipt ? "Reading receipt..." : "Read receipt"}
       </button>
-      <div className={lowConfidence ? "notice warning" : "notice"}>
-        OCR confidence: {Math.round(receipt.ocrConfidence * 100)}%.
-        {lowConfidence
-          ? " SplitSnap would retry with layout detection and a YOLO-style fallback before asking you to correct items."
-          : " Simulated OCR looks usable, and you can still correct every item."}
-      </div>
-      {visibleWarnings.map((warning) => (
-        <div className="notice warning" key={warning}>
-          {warning}
-        </div>
-      ))}
     </section>
   );
 }

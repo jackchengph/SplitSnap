@@ -4,12 +4,12 @@ import { demoGroup, demoReceipt, mockFriends } from "../domain/mockData";
 import { ItemAssignment } from "./ItemAssignment";
 
 describe("ItemAssignment", () => {
-  it("labels extracted rows without naming the provider", () => {
+  it("does not show scanner confidence or provider labels to customers", () => {
     render(
       <ItemAssignment
         receipt={{
           ...demoReceipt,
-          items: [{ ...demoReceipt.items[0], parseSource: "gemini" }]
+          items: [{ ...demoReceipt.items[0], parseSource: "gemini", needsReview: true }]
         }}
         friends={mockFriends}
         group={demoGroup}
@@ -21,8 +21,11 @@ describe("ItemAssignment", () => {
       />
     );
 
-    expect(screen.getByText("OCR")).toBeInTheDocument();
+    expect(screen.queryByText(/Confidence/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/OCR/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Gemini")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Manual review/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Check price/i)).not.toBeInTheDocument();
   });
 
   it("lets the payer edit an item quantity", () => {

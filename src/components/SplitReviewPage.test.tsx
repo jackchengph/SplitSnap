@@ -14,7 +14,6 @@ function renderReviewPage(overrides: Partial<Parameters<typeof SplitReviewPage>[
     notifications: [],
     paymentProofs: {},
     payerName: "Maya",
-    parseWarnings: [],
     onHome: vi.fn(),
     onSaveDinner: vi.fn().mockResolvedValue(undefined),
     isReadingUploadedReceipt: false,
