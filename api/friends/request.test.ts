@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adminFirestore } from "../_lib/firebaseAdmin";
 import { requireUserId } from "../_lib/authenticatedRequest";
+import { sendPushToUser } from "../_lib/push";
 import handler from "./request";
 
 const serverTimestampValue = { kind: "admin-server-timestamp" };
@@ -17,6 +18,10 @@ vi.mock("../_lib/firebaseAdmin", () => ({
 
 vi.mock("../_lib/authenticatedRequest", () => ({
   requireUserId: vi.fn()
+}));
+
+vi.mock("../_lib/push", () => ({
+  sendPushToUser: vi.fn().mockResolvedValue({ sent: 1, failed: 0 })
 }));
 
 interface StoredDoc {
@@ -152,6 +157,12 @@ describe("POST /api/friends/request", () => {
     expect(recorder.read()).toEqual({
       statusCode: 200,
       payload: { friendshipId: "maya__nico", status: "pending" }
+    });
+    expect(sendPushToUser).toHaveBeenCalledWith({
+      userId: "nico",
+      title: "New friend request",
+      body: "Someone wants to add you on SplitSnap.",
+      link: "/?page=friends"
     });
   });
 

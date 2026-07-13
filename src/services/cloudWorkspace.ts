@@ -198,16 +198,6 @@ export function subscribeToPublicUsers(
   };
 }
 
-export async function connectWithUser(
-  currentUserId: string,
-  friendId: string
-): Promise<void> {
-  await publicCloudFetch("/api/friends/connect", {
-    method: "POST",
-    body: JSON.stringify({ currentUserId, friendId })
-  });
-}
-
 export async function connectByFriendCode(
   _currentUserId: string,
   _friendCode: string

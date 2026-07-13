@@ -6,6 +6,7 @@ import {
   type ApiResponse
 } from "../_lib/authenticatedRequest.js";
 import { adminFirestore } from "../_lib/firebaseAdmin.js";
+import { sendPushToUser } from "../_lib/push.js";
 
 const invalidTargetError = "A valid target user is required.";
 const requestConflictError = "Friend request cannot be created.";
@@ -86,6 +87,13 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         updatedAt: FieldValue.serverTimestamp()
       });
     });
+
+    await sendPushToUser({
+      userId: targetUserId,
+      title: "New friend request",
+      body: "Someone wants to add you on SplitSnap.",
+      link: "/?page=friends"
+    }).catch(() => undefined);
 
     response.status(200).json({ friendshipId, status: "pending" });
   } catch (error) {

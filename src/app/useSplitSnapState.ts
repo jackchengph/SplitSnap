@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { demoGroup, demoReceipt, mockFriends } from "../domain/mockData";
 import {
   createExpenseNotifications,
@@ -12,7 +12,6 @@ import { updateReliabilityAfterPayment } from "../domain/reliability";
 import { parseCapturedReceipt } from "../domain/receiptParsingService";
 import { calculateSplit } from "../domain/splitCalculator";
 import {
-  connectWithUser,
   buildCloudExpenseDocument,
   type CloudExpenseDocument,
   savePaymentProof,
@@ -22,6 +21,11 @@ import {
   updateExpenseStatus,
   type PublicUserProfile
 } from "../services/cloudWorkspace";
+import {
+  createFriendRepository,
+  type FriendListEntry,
+  type FriendRepository
+} from "../services/friendRepository";
 import { sendPushReminder } from "../services/notificationClient";
 import { readReceiptImage } from "../services/receiptReader";
 import { loadLocalWorkspace, saveLocalWorkspace } from "../services/localWorkspace";
@@ -171,6 +175,8 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
       : loadLocalWorkspace(workspaceStorageKey, fallbackWorkspace, options.storage);
   });
   const [friends, setFriends] = useState<Friend[]>(storedWorkspace.friends);
+  const [friendEntries, setFriendEntries] = useState<FriendListEntry[]>([]);
+  const friendRepositoryRef = useRef<FriendRepository | null>(null);
   const [receipt, setReceipt] = useState<Receipt>(storedWorkspace.receipt);
   const [activeRole, setActiveRole] = useState<ActiveRole>(storedWorkspace.activeRole);
   const [payerStep, setPayerStep] = useState<PayerStep>(storedWorkspace.payerStep);
@@ -262,6 +268,35 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
         setFriends([sessionUserToFriend(options.currentUser!)]);
       }
     );
+  }, [isCloudMode, options.currentUser]);
+
+  useEffect(() => {
+    if (!isCloudMode || !options.currentUser) {
+      return;
+    }
+
+    const repository = createFriendRepository(options.currentUser.id);
+    friendRepositoryRef.current = repository;
+    const unsubscribe = repository.subscribe(
+      (entries) => {
+        setFriendEntries(entries);
+        const connectedIds = entries
+          .filter((entry) => entry.direction === "connected")
+          .map((entry) => entry.profile.id);
+        setConnectedFriendIds(connectedIds);
+        setSelectedDinnerFriendIds((current) =>
+          current.filter((friendId) => connectedIds.includes(friendId))
+        );
+      },
+      () => {
+        setFriendEntries([]);
+        setConnectedFriendIds([]);
+      }
+    );
+    return () => {
+      friendRepositoryRef.current = null;
+      unsubscribe();
+    };
   }, [isCloudMode, options.currentUser]);
 
   useEffect(() => {
@@ -367,18 +402,59 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }
   }
 
-  function connectFriend(friendId: string) {
+  function addDinnerFriend(friendId: string) {
     setActiveCloudPayerId(payerId);
-    setConnectedFriendIds((current) =>
+    if (!connectedFriendIds.includes(friendId)) {
+      return;
+    }
+    setSelectedDinnerFriendIds((current) =>
       current.includes(friendId) ? current : [...current, friendId]
     );
     setActiveParticipantId((current) => current || friendId);
+  }
 
+  function connectFriend(friendId: string) {
     if (isCloudMode) {
-      void connectWithUser(payerId, friendId).catch(() => {
-        setConnectedFriendIds((current) => current.filter((id) => id !== friendId));
+      const repository = friendRepositoryRef.current ?? createFriendRepository(payerId);
+      void repository.requestFriend(friendId).catch((error) => {
+        setParseWarnings((current) => [
+          ...current.filter((warning) => !warning.startsWith("Friend request failed:")),
+          `Friend request failed: ${error instanceof Error ? error.message : "Request was not sent."}`
+        ]);
       });
+      return;
     }
+
+    setConnectedFriendIds((current) =>
+      current.includes(friendId) ? current : [...current, friendId]
+    );
+    setSelectedDinnerFriendIds((current) =>
+      current.includes(friendId) ? current : [...current, friendId]
+    );
+    setActiveParticipantId((current) => current || friendId);
+  }
+
+  function respondToFriend(friendshipId: string, action: "accept" | "reject") {
+    if (!isCloudMode) {
+      return;
+    }
+
+    const repository = friendRepositoryRef.current ?? createFriendRepository(payerId);
+    const operation =
+      action === "accept"
+        ? repository.acceptFriend(friendshipId)
+        : repository.declineFriend(friendshipId);
+    void operation.catch((error) => {
+      setParseWarnings((current) => [
+        ...current.filter((warning) => !warning.startsWith("Friend response failed:")),
+        `Friend response failed: ${error instanceof Error ? error.message : "Response was not saved."}`
+      ]);
+    });
+  }
+
+  function removeDinnerFriend(friendId: string) {
+    setSelectedDinnerFriendIds((current) => current.filter((id) => id !== friendId));
+    setActiveParticipantId((current) => (current === friendId ? "" : current));
   }
 
   function disconnectFriend(friendId: string) {
@@ -725,6 +801,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     payerStep,
     connectedFriendIds,
     selectedDinnerFriendIds,
+    friendEntries,
     capturedReceiptImageUrl,
     parseStatus,
     parseWarnings,
@@ -735,6 +812,11 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     setPayerStep,
     setActiveParticipantId,
     connectFriend,
+    requestFriend: connectFriend,
+    acceptFriend: (friendshipId: string) => respondToFriend(friendshipId, "accept"),
+    declineFriend: (friendshipId: string) => respondToFriend(friendshipId, "reject"),
+    addDinnerFriend,
+    removeDinnerFriend,
     disconnectFriend,
     toggleDinnerFriend,
     goToGroupSetup,

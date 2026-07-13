@@ -105,11 +105,16 @@ describe("useSplitSnapState", () => {
 
     act(() => {
       result.current.toggleDinnerFriend("nico");
-      result.current.toggleDinnerFriend("enzo");
+      result.current.addDinnerFriend("enzo");
     });
 
-    expect(result.current.group.participantIds).toEqual(["maya", "nico", "enzo"]);
-    expect(result.current.split.results.map((split) => split.participantId)).toEqual(["nico", "enzo"]);
+    expect(result.current.group.participantIds).toEqual(
+      expect.arrayContaining(["maya", "nico", "enzo"])
+    );
+    expect(result.current.group.participantIds).toHaveLength(3);
+    expect(result.current.split.results.map((split) => split.participantId)).toEqual(
+      expect.arrayContaining(["nico", "enzo"])
+    );
   });
 
   it("stores a captured receipt image, parses it, and moves to review", async () => {

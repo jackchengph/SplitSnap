@@ -126,7 +126,12 @@ describe("Firebase friend gateway", () => {
     expect(firestoreMocks.runTransaction).not.toHaveBeenCalled();
   });
 
-  it("uses a server timestamp for status updates", async () => {
+  it("routes acceptances through the authenticated response endpoint", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ friendshipId: "maya__nico", status: "connected" })
+    });
+    vi.stubGlobal("fetch", fetcher);
     let emitMemberships!: (snapshot: {
       docs: Array<{ id: string; data: () => Record<string, unknown> }>;
     }) => void;
@@ -157,13 +162,15 @@ describe("Firebase friend gateway", () => {
 
     await repository.acceptFriend("maya__nico");
 
-    expect(firestoreMocks.updateDoc).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "friendships/maya__nico" }),
-      {
-        status: "connected",
-        blockedBy: null,
-        updatedAt: firestoreMocks.serverTimestampValue
-      }
-    );
+    expect(authMocks.getIdToken).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledWith("/api/friends/respond", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer cloud-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ friendshipId: "maya__nico", action: "accept" })
+    });
+    expect(firestoreMocks.updateDoc).not.toHaveBeenCalled();
   });
 });

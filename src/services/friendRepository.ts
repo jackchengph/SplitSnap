@@ -22,7 +22,7 @@ import {
 } from "../domain/friendship";
 import { firebaseRuntime } from "../platform/firebase";
 import { getIdToken } from "./authService";
-import { createFriendRequest } from "./friendRequestService";
+import { createFriendRequest, respondToFriendRequest } from "./friendRequestService";
 
 export interface FriendListEntry {
   profile: PublicUserProfile;
@@ -117,6 +117,16 @@ function createFirebaseFriendGateway(): FriendGateway {
       await createFriendRequest(idToken, targetUserId);
     },
     async updateStatus(id, status, blockedBy) {
+      if (status === "connected" || status === "declined") {
+        const idToken = await getIdToken();
+        await respondToFriendRequest(
+          idToken,
+          id,
+          status === "connected" ? "accept" : "reject"
+        );
+        return;
+      }
+
       await updateDoc(doc(firestore, "friendships", id), {
         status,
         blockedBy,

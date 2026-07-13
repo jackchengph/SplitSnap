@@ -193,8 +193,14 @@ function AuthenticatedSplitSnapApp({
       <FriendsExplorer
         friends={state.friends}
         connectedFriendIds={state.connectedFriendIds}
+        selectedDinnerFriendIds={state.selectedDinnerFriendIds}
+        friendEntries={state.friendEntries}
         currentUserId={user.id}
-        onConnect={state.connectFriend}
+        onRequestFriend={state.requestFriend}
+        onAcceptFriend={state.acceptFriend}
+        onDeclineFriend={state.declineFriend}
+        onAddDinnerFriend={state.addDinnerFriend}
+        onRemoveDinnerFriend={state.removeDinnerFriend}
         onRemove={state.disconnectFriend}
         onNext={() => setFlowStep("group")}
         onHome={goHome}

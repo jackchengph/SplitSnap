@@ -1,8 +1,9 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSplitSnapState } from "./useSplitSnapState";
 import { saveExpense, updateExpenseStatus } from "../services/cloudWorkspace";
 import { sendPushReminder } from "../services/notificationClient";
+import { createFriendRepository } from "../services/friendRepository";
 
 vi.mock("../services/cloudWorkspace", () => ({
   buildCloudExpenseDocument: vi.fn((input) => ({
@@ -25,7 +26,6 @@ vi.mock("../services/cloudWorkspace", () => ({
   }),
   subscribeToPublicUsers: vi.fn((_currentUserId, onValue) => {
     onValue({
-      connectedFriendIds: ["friend-uid"],
       profiles: [
         {
           id: "friend-uid",
@@ -33,6 +33,13 @@ vi.mock("../services/cloudWorkspace", () => ({
           firstName: "Nico",
           photoURL: null,
           handle: "nico_santos"
+        },
+        {
+          id: "pending-uid",
+          displayName: "Bea Pending",
+          firstName: "Bea",
+          photoURL: null,
+          handle: "bea_pending"
         }
       ]
     });
@@ -40,11 +47,82 @@ vi.mock("../services/cloudWorkspace", () => ({
   })
 }));
 
+vi.mock("../services/friendRepository", () => ({
+  createFriendRepository: vi.fn()
+}));
+
 vi.mock("../services/notificationClient", () => ({
   sendPushReminder: vi.fn().mockResolvedValue({ sent: 1, failed: 0 })
 }));
 
 describe("useSplitSnapState cloud mode", () => {
+  function mockFriendRepository(entries: unknown[] = []) {
+    const repository = {
+      requestFriend: vi.fn().mockResolvedValue(undefined),
+      acceptFriend: vi.fn().mockResolvedValue(undefined),
+      declineFriend: vi.fn().mockResolvedValue(undefined),
+      removeFriend: vi.fn().mockResolvedValue(undefined),
+      blockFriend: vi.fn().mockResolvedValue(undefined),
+      findByFriendCode: vi.fn(),
+      findByHandle: vi.fn(),
+      subscribe: vi.fn((listener: (value: unknown[]) => void) => {
+        listener(entries);
+        return () => undefined;
+      })
+    };
+    vi.mocked(createFriendRepository).mockReturnValue(repository as never);
+    return repository;
+  }
+
+  function connectedEntry(profileId = "friend-uid") {
+    return {
+      profile: {
+        id: profileId,
+        displayName: "Nico Santos",
+        photoURL: null,
+        handle: "nico_santos"
+      },
+      friendship: {
+        id: "current-uid__friend-uid",
+        memberKey: "current-uid__friend-uid",
+        memberIds: ["current-uid", profileId],
+        requestedBy: "current-uid",
+        status: "connected",
+        blockedBy: null,
+        createdAt: "2026-07-13T00:00:00.000Z",
+        updatedAt: "2026-07-13T00:00:00.000Z"
+      },
+      direction: "connected"
+    };
+  }
+
+  function outgoingEntry() {
+    return {
+      profile: {
+        id: "pending-uid",
+        displayName: "Bea Pending",
+        photoURL: null,
+        handle: "bea_pending"
+      },
+      friendship: {
+        id: "current-uid__pending-uid",
+        memberKey: "current-uid__pending-uid",
+        memberIds: ["current-uid", "pending-uid"],
+        requestedBy: "current-uid",
+        status: "pending",
+        blockedBy: null,
+        createdAt: "2026-07-13T00:00:00.000Z",
+        updatedAt: "2026-07-13T00:00:00.000Z"
+      },
+      direction: "outgoing"
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFriendRepository([connectedEntry()]);
+  });
+
   it("uses real cloud profiles without auto-adding them to a dinner", async () => {
     const currentUser = {
       id: "current-uid",
@@ -62,16 +140,46 @@ describe("useSplitSnapState cloud mode", () => {
     );
 
     await waitFor(() => {
-      expect(result.current.friends.map((friend) => friend.id)).toEqual([
-        "current-uid",
-        "friend-uid"
-      ]);
+      expect(result.current.friends.map((friend) => friend.id)).toContain("friend-uid");
     });
 
-    expect(result.current.connectedFriendIds).toEqual([]);
+    expect(result.current.connectedFriendIds).toEqual(["friend-uid"]);
+    expect(result.current.selectedDinnerFriendIds).toEqual([]);
     expect(result.current.friends.find((friend) => friend.id === "friend-uid")?.name).toBe(
       "Nico Santos"
     );
+  });
+
+  it("only lets accepted friends be added to a dinner", async () => {
+    mockFriendRepository([connectedEntry(), outgoingEntry()]);
+    const currentUser = {
+      id: "current-uid",
+      displayName: "Maya Cruz",
+      firstName: "Maya",
+      email: "maya@example.com",
+      photoURL: null
+    };
+
+    const { result } = renderHook(() =>
+      useSplitSnapState({
+        cloudMode: true,
+        currentUser
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.connectedFriendIds).toEqual(["friend-uid"]);
+    });
+
+    act(() => {
+      result.current.addDinnerFriend("pending-uid");
+    });
+    expect(result.current.selectedDinnerFriendIds).toEqual([]);
+
+    act(() => {
+      result.current.addDinnerFriend("friend-uid");
+    });
+    expect(result.current.selectedDinnerFriendIds).toEqual(["friend-uid"]);
   });
 
   it("saves the current dinner before sending a cloud reminder", async () => {
