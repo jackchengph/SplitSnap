@@ -5,6 +5,17 @@ import { saveExpense, updateExpenseStatus } from "../services/cloudWorkspace";
 import { sendPushReminder } from "../services/notificationClient";
 
 vi.mock("../services/cloudWorkspace", () => ({
+  buildCloudExpenseDocument: vi.fn((input) => ({
+    id: input.expenseId,
+    payerId: input.payerId,
+    participantIds: input.group.participantIds,
+    name: input.group.name,
+    receipt: { ...input.receipt, imageUrl: "" },
+    statuses: input.statuses,
+    paymentProofs: input.paymentProofs || {},
+    createdAt: input.createdAt || input.updatedAt,
+    updatedAt: input.updatedAt
+  })),
   connectWithUser: vi.fn().mockResolvedValue(undefined),
   saveExpense: vi.fn().mockResolvedValue(undefined),
   updateExpenseStatus: vi.fn().mockResolvedValue(undefined),
@@ -117,5 +128,96 @@ describe("useSplitSnapState cloud mode", () => {
         })
       );
     });
+  });
+
+  it("shows a saved dinner in local activity state immediately", async () => {
+    const currentUser = {
+      id: "current-uid",
+      displayName: "Maya Cruz",
+      firstName: "Maya",
+      email: "maya@example.com",
+      photoURL: null
+    };
+
+    const { result } = renderHook(() =>
+      useSplitSnapState({
+        cloudMode: true,
+        currentUser
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.friends.map((friend) => friend.id)).toContain("friend-uid");
+    });
+
+    act(() => {
+      result.current.connectFriend("friend-uid");
+      result.current.useManualReceipt();
+    });
+
+    act(() => {
+      result.current.updateItemPrice(result.current.receipt.items[0].id, 600);
+    });
+
+    await act(async () => {
+      await result.current.saveDinner();
+    });
+
+    expect(result.current.cloudExpenses).toHaveLength(1);
+    expect(result.current.cloudExpenses[0]).toMatchObject({
+      payerId: "current-uid",
+      participantIds: ["current-uid", "friend-uid"]
+    });
+    expect(result.current.cloudExpenses[0].receipt.items[0]).toMatchObject({
+      price: 600
+    });
+  });
+
+  it("removes a locally opened cloud balance after it is marked paid", async () => {
+    const currentUser = {
+      id: "current-uid",
+      displayName: "Maya Cruz",
+      firstName: "Maya",
+      email: "maya@example.com",
+      photoURL: null
+    };
+
+    const { result } = renderHook(() =>
+      useSplitSnapState({
+        cloudMode: true,
+        currentUser
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.friends.map((friend) => friend.id)).toContain("friend-uid");
+    });
+
+    act(() => {
+      result.current.connectFriend("friend-uid");
+    });
+
+    await waitFor(() => {
+      expect(result.current.connectedFriendIds).toContain("friend-uid");
+    });
+
+    act(() => {
+      result.current.useManualReceipt();
+    });
+
+    act(() => {
+      result.current.updateItemPrice(result.current.receipt.items[0].id, 600);
+    });
+
+    await act(async () => {
+      await result.current.saveDinner();
+    });
+
+    act(() => {
+      result.current.markPaid("friend-uid");
+    });
+
+    expect(result.current.cloudExpenses[0].statuses["friend-uid"]).toBe("paid");
+    expect(result.current.split.results).toEqual([]);
   });
 });

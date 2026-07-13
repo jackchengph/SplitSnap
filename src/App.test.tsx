@@ -83,6 +83,7 @@ function desktopNavigation() {
 }
 
 async function selectDinnerFriend(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Add Nico" }));
   await user.click(screen.getByRole("button", { name: /Next: add the bill/i }));
 }
 
@@ -133,6 +134,8 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: /Who joined this meal/i })
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "0 added" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Next: add the bill/i })).toBeDisabled();
 
     await selectDinnerFriend(user);
 

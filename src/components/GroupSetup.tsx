@@ -3,7 +3,9 @@ import type { Friend } from "../domain/types";
 interface GroupSetupProps {
   friends: Friend[];
   connectedFriendIds: string[];
+  selectedDinnerFriendIds: string[];
   onRemoveFriend: (friendId: string) => void;
+  onToggleDinnerFriend: (friendId: string) => void;
   onNext: () => void;
   onHome: () => void;
 }
@@ -11,11 +13,16 @@ interface GroupSetupProps {
 export function GroupSetup({
   friends,
   connectedFriendIds,
+  selectedDinnerFriendIds,
   onRemoveFriend,
+  onToggleDinnerFriend,
   onNext,
   onHome
 }: GroupSetupProps) {
   const connectedFriends = friends.filter((friend) => connectedFriendIds.includes(friend.id));
+  const selectedFriends = connectedFriends.filter((friend) =>
+    selectedDinnerFriendIds.includes(friend.id)
+  );
 
   return (
     <main className="app-shell narrow-shell">
@@ -33,12 +40,13 @@ export function GroupSetup({
       <section className="panel">
         <div className="section-heading">
           <p className="eyebrow">Dinner participants</p>
-          <h2>{connectedFriends.length} added</h2>
+          <h2>{selectedFriends.length} added</h2>
         </div>
         <div className="friend-list selectable-list">
           {connectedFriends.map((friend) => {
+            const isSelected = selectedDinnerFriendIds.includes(friend.id);
             return (
-              <article className="selectable-card selected" key={friend.id}>
+              <article className={`selectable-card ${isSelected ? "selected" : ""}`} key={friend.id}>
                 <span className="avatar" style={{ backgroundColor: `hsl(${friend.avatarHue} 62% 88%)` }}>
                   {friend.avatarLabel}
                 </span>
@@ -49,9 +57,16 @@ export function GroupSetup({
                 <button
                   type="button"
                   className="secondary compact-button"
+                  onClick={() => onToggleDinnerFriend(friend.id)}
+                >
+                  {isSelected ? "Remove from dinner" : `Add ${friend.name}`}
+                </button>
+                <button
+                  type="button"
+                  className="text-command danger-command"
                   onClick={() => onRemoveFriend(friend.id)}
                 >
-                  Remove
+                  Unfriend
                 </button>
               </article>
             );
@@ -64,7 +79,7 @@ export function GroupSetup({
           <button
             type="button"
             onClick={onNext}
-            disabled={connectedFriends.length === 0}
+            disabled={selectedFriends.length === 0}
           >
             Next: add the bill
           </button>

@@ -13,6 +13,7 @@ import { parseCapturedReceipt } from "../domain/receiptParsingService";
 import { calculateSplit } from "../domain/splitCalculator";
 import {
   connectWithUser,
+  buildCloudExpenseDocument,
   type CloudExpenseDocument,
   savePaymentProof,
   saveExpense,
@@ -283,12 +284,59 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     };
   }
 
+  function mergeLocalCloudExpense(expense: CloudExpenseDocument) {
+    setCloudExpenses((current) => {
+      const withoutCurrent = current.filter((item) => item.id !== expense.id);
+      return [expense, ...withoutCurrent].sort((left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt)
+      );
+    });
+  }
+
+  function updateLocalCloudExpenseStatus(
+    expenseIdToUpdate: string,
+    participantId: string,
+    status: PaymentStatus
+  ) {
+    setCloudExpenses((current) =>
+      current.map((expense) =>
+        expense.id === expenseIdToUpdate
+          ? {
+              ...expense,
+              statuses: { ...expense.statuses, [participantId]: status },
+              updatedAt: new Date().toISOString()
+            }
+          : expense
+      )
+    );
+  }
+
+  function updateLocalCloudExpenseProof(expenseIdToUpdate: string, proof: PaymentProof) {
+    setCloudExpenses((current) =>
+      current.map((expense) =>
+        expense.id === expenseIdToUpdate
+          ? {
+              ...expense,
+              paymentProofs: {
+                ...(expense.paymentProofs || {}),
+                [proof.participantId]: proof
+              },
+              updatedAt: new Date().toISOString()
+            }
+          : expense
+      )
+    );
+  }
+
   async function persistCurrentCloudExpense() {
     if (!isCloudMode || activeGroup.payerId !== payerId) {
       return;
     }
 
-    await saveExpense(currentCloudExpense());
+    const updatedAt = new Date().toISOString();
+    const expense = currentCloudExpense(updatedAt);
+    await saveExpense(expense);
+    mergeLocalCloudExpense(buildCloudExpenseDocument(expense));
     setParseWarnings((current) =>
       current.filter((warning) => !warning.startsWith("Cloud save failed:"))
     );
@@ -296,6 +344,15 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
 
   async function saveDinner() {
     if (!isCloudMode) {
+      setNotifications(
+        createExpenseNotifications({
+          expenseId: receipt.id,
+          payerName,
+          dinnerName: activeGroup.name,
+          results: split.results,
+          createdAt: new Date().toISOString()
+        })
+      );
       return;
     }
 
@@ -369,6 +426,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
       total: 0
     };
     setReceipt(nextReceipt);
+    setNotifications([]);
     setPayerStep("review");
   }
 
@@ -540,6 +598,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
             body: `${payerName} is waiting on your SplitSnap balance. Open Activity to view the breakdown.`
           })
         )
+        .then(() => updateLocalCloudExpenseStatus(receipt.id, participantId, "reminded"))
         .catch((error) => {
           setParseWarnings((current) => [
             ...current.filter((warning) => !warning.startsWith("Reminder failed:")),
@@ -556,6 +615,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }
 
     setStatuses((current) => ({ ...current, [participantId]: "paid" }));
+    updateLocalCloudExpenseStatus(receipt.id, participantId, "paid");
     if (isCloudMode) {
       void updateExpenseStatus({
         expenseId: receipt.id,
@@ -608,6 +668,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     };
 
     setPaymentProofs((current) => ({ ...current, [participantId]: proof }));
+    updateLocalCloudExpenseProof(receipt.id, proof);
     if (isCloudMode) {
       void savePaymentProof({
         expenseId: receipt.id,

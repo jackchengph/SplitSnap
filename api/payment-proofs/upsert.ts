@@ -4,6 +4,7 @@ import {
   type ApiResponse
 } from "../_lib/authenticatedRequest.js";
 import { createSupabaseServiceClient } from "../_lib/supabaseServer.js";
+import { sendPushToUser } from "../_lib/push.js";
 
 interface ProofBody {
   expenseId?: unknown;
@@ -83,7 +84,22 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       throw new Error(dinnerResult.error.message);
     }
 
-    response.status(200).json({ saved: true });
+    let notified = 0;
+    let notificationFailed = false;
+    try {
+      const pushResult = await sendPushToUser({
+        userId: payerId,
+        expenseId,
+        title: "Payment proof uploaded",
+        body: "A friend uploaded payment proof for your SplitSnap dinner.",
+        link: "/?page=activity"
+      });
+      notified = pushResult.sent;
+    } catch {
+      notificationFailed = true;
+    }
+
+    response.status(200).json({ saved: true, notified, notificationFailed });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Payment proof could not be saved.";
     response.status(message === "Authentication required." ? 401 : 500).json({

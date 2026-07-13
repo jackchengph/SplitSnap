@@ -4,6 +4,7 @@ import {
   type ApiResponse
 } from "../_lib/authenticatedRequest.js";
 import { sendPushToUser } from "../_lib/push.js";
+import { createSupabaseServiceClient } from "../_lib/supabaseServer.js";
 
 interface ReminderBody {
   expenseId?: unknown;
@@ -27,6 +28,30 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     }
 
     if (participantId === callerId) {
+      response.status(403).json({ error: "Not allowed to send this reminder." });
+      return;
+    }
+
+    const supabase = createSupabaseServiceClient();
+    if (!supabase) {
+      response.status(500).json({ error: "Supabase is not configured." });
+      return;
+    }
+
+    const dinner = await supabase
+      .from("dinners")
+      .select("payer_id,participant_ids")
+      .eq("id", String(expenseId))
+      .maybeSingle();
+    if (dinner.error) {
+      throw new Error(dinner.error.message);
+    }
+
+    const payerId = String(dinner.data?.payer_id || "");
+    const participantIds = Array.isArray(dinner.data?.participant_ids)
+      ? dinner.data.participant_ids
+      : [];
+    if (callerId !== payerId || !participantIds.includes(String(participantId))) {
       response.status(403).json({ error: "Not allowed to send this reminder." });
       return;
     }

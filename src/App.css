@@ -1576,6 +1576,11 @@ button:active {
   padding: 8px 0;
 }
 
+.danger-command {
+  color: #9f2d20;
+  font-size: 0.78rem;
+}
+
 .review-total {
   align-items: end;
   display: grid;

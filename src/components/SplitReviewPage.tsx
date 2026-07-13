@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatCurrency } from "../domain/format";
 import type {
   DinnerGroup,
@@ -60,6 +61,22 @@ export function SplitReviewPage({
   onMarkPaid
 }: SplitReviewPageProps) {
   const readyToSave = split.results.length > 0;
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const handleSaveDinner = async () => {
+    setSaveError("");
+    setIsSaving(true);
+
+    try {
+      await onSaveDinner();
+      onHome();
+    } catch {
+      setSaveError("Dinner could not be saved. Try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <main className="review-page page-enter">
@@ -77,15 +94,21 @@ export function SplitReviewPage({
           <button
             type="button"
             className="text-command"
-            disabled={!readyToSave}
+            disabled={!readyToSave || isSaving}
             onClick={() => {
-              void onSaveDinner().then(onHome);
+              void handleSaveDinner();
             }}
           >
-            Save dinner
+            {isSaving ? "Saving dinner..." : "Save dinner"}
           </button>
         </div>
       </header>
+
+      {saveError ? (
+        <div className="notice warning" role="status">
+          {saveError}
+        </div>
+      ) : null}
 
       <div className="dashboard-grid">
         <div className="workflow-column">

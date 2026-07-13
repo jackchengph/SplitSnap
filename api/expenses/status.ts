@@ -51,10 +51,12 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     const participantIds = Array.isArray(dinner.data?.participant_ids)
       ? dinner.data.participant_ids
       : [];
+    const callerIsPayer = payerId === callerId;
+    const callerIsSettlingSelf = callerId === participantId && status === "paid";
     if (
-      payerId !== callerId ||
       !participantIds.includes(participantId) ||
-      participantId === callerId
+      participantId === payerId ||
+      (!callerIsPayer && !callerIsSettlingSelf)
     ) {
       response.status(403).json({ error: "Not allowed to update this dinner." });
       return;

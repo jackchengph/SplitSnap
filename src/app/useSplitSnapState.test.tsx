@@ -162,6 +162,32 @@ describe("useSplitSnapState", () => {
     expect(result.current.statuses.nico).toBe("reminded");
   });
 
+  it("clears stale preview notifications for a new manual dinner and saves current ones", async () => {
+    const { result } = renderHook(() => useSplitSnapState());
+
+    act(() => {
+      result.current.toggleDinnerFriend("nico");
+    });
+
+    act(() => {
+      result.current.useManualReceipt();
+    });
+
+    expect(result.current.notifications).toEqual([]);
+
+    act(() => {
+      result.current.updateItemPrice(result.current.receipt.items[0].id, 1000);
+    });
+
+    await act(async () => {
+      await result.current.saveDinner();
+    });
+
+    expect(result.current.notifications.map((notification) => notification.participantId)).toEqual([
+      "nico"
+    ]);
+  });
+
   it("auto-marks a participant paid after valid proof upload", () => {
     const { result } = renderHook(() => useSplitSnapState());
 
