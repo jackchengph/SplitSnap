@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   GeminiGatewayError,
   requestGeminiReceipt
@@ -25,6 +25,10 @@ function response(status: number, body: unknown): Response {
 }
 
 describe("requestGeminiReceipt", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("posts the receipt image to the same-origin endpoint", async () => {
     const fetcher = vi.fn().mockResolvedValue(response(200, { extraction }));
 
@@ -56,6 +60,19 @@ describe("requestGeminiReceipt", () => {
     await expect(
       requestGeminiReceipt("data:image/webp;base64,YWJj", { fetcher, timeoutMs: 1 })
     ).rejects.toMatchObject({ name: "GeminiGatewayError", fallbackEligible: true });
+  });
+
+  it("uses a short default timeout so capture does not feel stuck", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn((_url: RequestInfo | URL, options?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    }));
+
+    const request = requestGeminiReceipt("data:image/webp;base64,YWJj", { fetcher });
+    const expectation = expect(request).rejects.toMatchObject({ name: "GeminiGatewayError" });
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    await expectation;
   });
 
   it("sanitizes network errors", async () => {

@@ -70,7 +70,7 @@ export async function requestGeminiReceipt(
 ): Promise<NormalizedReceiptExtraction> {
   const controller = new AbortController();
   const optimizedImage = await prepareGeminiReceiptImage(imageDataUrl);
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 55_000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 18_000);
 
   try {
     const response = await (options.fetcher ?? fetch)("/api/receipts/parse", {

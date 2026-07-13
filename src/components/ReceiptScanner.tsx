@@ -13,11 +13,37 @@ function fallbackReceiptImage(): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+const captureLongestEdge = 1600;
+const captureJpegQuality = 0.78;
+
+export function createReceiptCaptureDataUrl(
+  video: HTMLVideoElement | null,
+  canvas: HTMLCanvasElement | null
+): string {
+  if (!video || !canvas || video.videoWidth <= 0 || video.videoHeight <= 0) {
+    return fallbackReceiptImage();
+  }
+
+  const scale = Math.min(1, captureLongestEdge / Math.max(video.videoWidth, video.videoHeight));
+  const width = Math.max(1, Math.round(video.videoWidth * scale));
+  const height = Math.max(1, Math.round(video.videoHeight * scale));
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return fallbackReceiptImage();
+  }
+
+  context.drawImage(video, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", captureJpegQuality);
+}
+
 export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }: ReceiptScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraMessage, setCameraMessage] = useState("Starting camera");
+  const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,22 +83,16 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
     };
   }, []);
 
-  function captureFrame() {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
+  async function captureFrame() {
+    if (isCapturing) return;
+    setIsCapturing(true);
+    setCameraMessage("Preparing image");
 
-    if (video && canvas && video.videoWidth > 0 && video.videoHeight > 0) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext("2d");
-      if (context) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        void onCapture(canvas.toDataURL("image/png"));
-        return;
-      }
+    try {
+      await onCapture(createReceiptCaptureDataUrl(videoRef.current, canvasRef.current));
+    } finally {
+      setIsCapturing(false);
     }
-
-    void onCapture(fallbackReceiptImage());
   }
 
   return (
@@ -105,8 +125,8 @@ export function ReceiptScanner({ parseStatus, parseWarnings, onCapture, onHome }
               Align the whole receipt inside the highlighted frame, then capture. Gemini reads the receipt first, and unresolved rows stay editable.
             </p>
           </div>
-          <button type="button" onClick={captureFrame}>
-            Capture receipt
+          <button type="button" disabled={isCapturing} onClick={() => void captureFrame()}>
+            {isCapturing ? "Preparing..." : "Capture receipt"}
           </button>
         </div>
         <div className="parse-steps" aria-label="Receipt parse status">
