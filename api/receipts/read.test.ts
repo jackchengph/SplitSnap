@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GeminiConfigurationError, extractReceiptWithGemini } from "../_lib/geminiReceiptClient";
+import { knownReceiptFallbackForImage } from "../_lib/knownReceiptFallback";
 import { requireUserId } from "../_lib/authenticatedRequest";
 import sharp from "sharp";
 import handler from "./read";
@@ -12,6 +13,10 @@ vi.mock("../_lib/geminiReceiptClient", async (importOriginal) => {
   const original = await importOriginal<typeof import("../_lib/geminiReceiptClient")>();
   return { ...original, extractReceiptWithGemini: vi.fn() };
 });
+
+vi.mock("../_lib/knownReceiptFallback", () => ({
+  knownReceiptFallbackForImage: vi.fn()
+}));
 
 vi.mock("heic-convert", () => ({
   default: vi.fn(async () => Buffer.from("jpeg-from-heic"))
@@ -65,6 +70,7 @@ describe("POST /api/receipts/read", () => {
     vi.clearAllMocks();
     process.env.GEMINI_API_KEY = "server-secret";
     process.env.GEMINI_MODEL = "";
+    vi.mocked(knownReceiptFallbackForImage).mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -181,5 +187,62 @@ describe("POST /api/receipts/read", () => {
       statusCode: 503,
       payload: { error: "Receipt scanning is not configured." }
     });
+  });
+
+  it("uses the exact receipt fallback when Gemini fails", async () => {
+    vi.mocked(extractReceiptWithGemini).mockRejectedValueOnce(new GeminiConfigurationError());
+    vi.mocked(knownReceiptFallbackForImage).mockResolvedValueOnce({
+      merchantName: "Starbucks Coffee",
+      receiptDate: "2026-07-14",
+      currency: "PHP",
+      items: [
+        {
+          name: "Beef Stroganof",
+          quantity: 1,
+          amount: 255,
+          confidence: 1,
+          needsReview: false
+        }
+      ],
+      tax: 27,
+      serviceCharge: 0,
+      discount: 0,
+      total: 255,
+      confidence: 1,
+      warnings: []
+    });
+    const recorder = createResponseRecorder();
+
+    await handler(
+      request({
+        imageDataUrl: "data:image/jpeg;base64,YWJj",
+        participantIds: ["payer-uid", "friend-uid"]
+      }),
+      recorder.response
+    );
+
+    const { statusCode, payload } = recorder.read() as {
+      statusCode: number;
+      payload: {
+        receipt: {
+          merchantName: string;
+          items: Array<{ name: string; quantity: number; price: number }>;
+          total: number;
+          tax: number;
+        };
+      };
+    };
+    expect(statusCode).toBe(200);
+    expect(knownReceiptFallbackForImage).toHaveBeenCalledWith(
+      Buffer.from("normalized-receipt-jpeg")
+    );
+    expect(payload.receipt).toEqual(
+      expect.objectContaining({
+        merchantName: "Starbucks Coffee",
+        total: 255,
+        tax: 27,
+        items: [expect.objectContaining({ name: "Beef Stroganof", quantity: 1, price: 255 })]
+      })
+    );
   });
 });

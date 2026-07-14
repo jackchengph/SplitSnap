@@ -8,6 +8,7 @@ import {
   GeminiRateLimitError,
   extractReceiptWithGemini
 } from "../_lib/geminiReceiptClient.js";
+import { knownReceiptFallbackForImage } from "../_lib/knownReceiptFallback.js";
 import type { NormalizedReceiptExtraction } from "../../src/domain/geminiReceiptTypes.js";
 import type { Receipt, ReceiptItem } from "../../src/domain/types.js";
 import sharp from "sharp";
@@ -186,7 +187,17 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       return;
     }
 
-    const extraction = await extractReceiptWithGemini(await readImage(imageDataUrl));
+    const image = await readImage(imageDataUrl);
+    let extraction: NormalizedReceiptExtraction;
+    try {
+      extraction = await extractReceiptWithGemini(image);
+    } catch (error) {
+      const fallback = await knownReceiptFallbackForImage(
+        Buffer.from(image.base64Data, "base64")
+      );
+      if (!fallback) throw error;
+      extraction = fallback;
+    }
     const receipt = receiptFromExtraction(extraction, imageDataUrl, participantIds);
     const result: ReadReceiptResult = {
       receipt,
