@@ -92,7 +92,7 @@ function renderExplorer(overrides: Partial<Parameters<typeof FriendsExplorer>[0]
     onDeclineFriend: vi.fn(),
     onAddDinnerFriend: vi.fn(),
     onRemoveDinnerFriend: vi.fn(),
-    onRemove: vi.fn(),
+    onUnfriend: vi.fn().mockResolvedValue(undefined),
     onNext: vi.fn(),
     onHome: vi.fn(),
     ...overrides
@@ -144,5 +144,39 @@ describe("FriendsExplorer", () => {
 
     await user.click(within(enzoCard as HTMLElement).getByRole("button", { name: "Reject" }));
     expect(props.onDeclineFriend).toHaveBeenCalledWith("enzo__maya");
+  });
+
+  it("keeps a connected friend when unfriend confirmation is canceled", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const props = renderExplorer();
+
+    await user.click(screen.getByRole("button", { name: "Unfriend Nico" }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      "Unfriend Nico? They will return to Explore."
+    );
+    expect(props.onUnfriend).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("confirms unfriend with the relationship and profile IDs while preventing duplicate clicks", async () => {
+    const user = userEvent.setup();
+    let finishRemoval!: () => void;
+    const pendingRemoval = new Promise<void>((resolve) => {
+      finishRemoval = resolve;
+    });
+    const onUnfriend = vi.fn(() => pendingRemoval);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderExplorer({ onUnfriend });
+
+    await user.click(screen.getByRole("button", { name: "Unfriend Nico" }));
+
+    expect(onUnfriend).toHaveBeenCalledWith("maya__nico", "nico");
+    expect(screen.getByRole("button", { name: "Unfriending Nico" })).toBeDisabled();
+
+    finishRemoval();
+    expect(await screen.findByRole("button", { name: "Unfriend Nico" })).toBeEnabled();
+    confirm.mockRestore();
   });
 });

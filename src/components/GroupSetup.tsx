@@ -4,7 +4,6 @@ interface GroupSetupProps {
   friends: Friend[];
   connectedFriendIds: string[];
   selectedDinnerFriendIds: string[];
-  onRemoveFriend: (friendId: string) => void;
   onToggleDinnerFriend: (friendId: string) => void;
   onNext: () => void;
   onHome: () => void;
@@ -14,7 +13,6 @@ export function GroupSetup({
   friends,
   connectedFriendIds,
   selectedDinnerFriendIds,
-  onRemoveFriend,
   onToggleDinnerFriend,
   onNext,
   onHome
@@ -60,13 +58,6 @@ export function GroupSetup({
                   onClick={() => onToggleDinnerFriend(friend.id)}
                 >
                   {isSelected ? "Remove from dinner" : `Add ${friend.name}`}
-                </button>
-                <button
-                  type="button"
-                  className="text-command danger-command"
-                  onClick={() => onRemoveFriend(friend.id)}
-                >
-                  Unfriend
                 </button>
               </article>
             );

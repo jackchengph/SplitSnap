@@ -223,6 +223,70 @@ describe("useSplitSnapState cloud mode", () => {
     expect(result.current.selectedDinnerFriendIds).toEqual(["friend-uid"]);
   });
 
+  it("persists an unfriend before removing the friend from the dinner draft", async () => {
+    const repository = mockFriendRepository([connectedEntry()]);
+    const currentUser = {
+      id: "current-uid",
+      displayName: "Maya Cruz",
+      firstName: "Maya",
+      email: "maya@example.com",
+      photoURL: null
+    };
+    const { result } = renderHook(() =>
+      useSplitSnapState({ cloudMode: true, currentUser })
+    );
+
+    await waitFor(() => {
+      expect(result.current.connectedFriendIds).toEqual(["friend-uid"]);
+    });
+    act(() => result.current.addDinnerFriend("friend-uid"));
+
+    await act(async () => {
+      await result.current.disconnectFriend(
+        "current-uid__friend-uid",
+        "friend-uid"
+      );
+    });
+
+    expect(repository.removeFriend).toHaveBeenCalledWith(
+      "current-uid__friend-uid"
+    );
+    expect(result.current.connectedFriendIds).toEqual([]);
+    expect(result.current.selectedDinnerFriendIds).toEqual([]);
+  });
+
+  it("keeps a friend in the dinner draft when unfriend persistence fails", async () => {
+    const repository = mockFriendRepository([connectedEntry()]);
+    repository.removeFriend.mockRejectedValueOnce(new Error("offline"));
+    const currentUser = {
+      id: "current-uid",
+      displayName: "Maya Cruz",
+      firstName: "Maya",
+      email: "maya@example.com",
+      photoURL: null
+    };
+    const { result } = renderHook(() =>
+      useSplitSnapState({ cloudMode: true, currentUser })
+    );
+
+    await waitFor(() => {
+      expect(result.current.connectedFriendIds).toEqual(["friend-uid"]);
+    });
+    act(() => result.current.addDinnerFriend("friend-uid"));
+
+    await expect(
+      act(async () => {
+        await result.current.disconnectFriend(
+          "current-uid__friend-uid",
+          "friend-uid"
+        );
+      })
+    ).rejects.toThrow("offline");
+
+    expect(result.current.connectedFriendIds).toEqual(["friend-uid"]);
+    expect(result.current.selectedDinnerFriendIds).toEqual(["friend-uid"]);
+  });
+
   it("saves the current dinner before sending a cloud reminder", async () => {
     const currentUser = {
       id: "current-uid",

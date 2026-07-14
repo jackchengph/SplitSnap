@@ -153,6 +153,7 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "0 added" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Next: add the bill/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Unfriend" })).not.toBeInTheDocument();
 
     await selectDinnerFriend(user);
 

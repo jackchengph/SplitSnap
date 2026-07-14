@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Friend } from "../domain/types";
 import type { FriendListEntry } from "../services/friendRepository";
 
@@ -13,7 +13,7 @@ interface FriendsExplorerProps {
   onDeclineFriend: (friendshipId: string) => void;
   onAddDinnerFriend: (friendId: string) => void;
   onRemoveDinnerFriend: (friendId: string) => void;
-  onRemove: (friendId: string) => void;
+  onUnfriend: (friendshipId: string, friendId: string) => Promise<void>;
   onNext: () => void;
   onHome: () => void;
 }
@@ -29,9 +29,11 @@ export function FriendsExplorer({
   onDeclineFriend,
   onAddDinnerFriend,
   onRemoveDinnerFriend,
+  onUnfriend,
   onNext,
   onHome
 }: FriendsExplorerProps) {
+  const [removingFriendId, setRemovingFriendId] = useState("");
   const people = friends.filter((friend) => friend.id !== currentUserId);
   const dinnerFriends = people.filter((friend) =>
     selectedDinnerFriendIds.includes(friend.id)
@@ -77,16 +79,49 @@ export function FriendsExplorer({
 
   function renderDinnerAction(friend: Friend) {
     const isInDinner = selectedDinnerFriendIds.includes(friend.id);
+    const relationship = relationshipFor(friend.id);
+    const friendshipId =
+      relationship?.friendship.id ?? [currentUserId, friend.id].sort().join("__");
+    const isRemoving = removingFriendId === friend.id;
+
+    async function unfriend() {
+      if (
+        !window.confirm(`Unfriend ${friend.name}? They will return to Explore.`)
+      ) {
+        return;
+      }
+
+      setRemovingFriendId(friend.id);
+      try {
+        await onUnfriend(friendshipId, friend.id);
+      } catch {
+        // The state layer keeps the friend visible and surfaces the save error.
+      } finally {
+        setRemovingFriendId("");
+      }
+    }
+
     return (
-      <button
-        type="button"
-        className="secondary compact-button"
-        onClick={() =>
-          isInDinner ? onRemoveDinnerFriend(friend.id) : onAddDinnerFriend(friend.id)
-        }
-      >
-        {isInDinner ? "Remove from dinner" : `Add ${friend.name} to dinner`}
-      </button>
+      <div className="button-row friend-request-actions">
+        <button
+          type="button"
+          className="secondary compact-button"
+          disabled={isRemoving}
+          onClick={() =>
+            isInDinner ? onRemoveDinnerFriend(friend.id) : onAddDinnerFriend(friend.id)
+          }
+        >
+          {isInDinner ? "Remove from dinner" : `Add ${friend.name} to dinner`}
+        </button>
+        <button
+          type="button"
+          className="text-command danger-command"
+          disabled={isRemoving}
+          onClick={() => void unfriend()}
+        >
+          {isRemoving ? `Unfriending ${friend.name}` : `Unfriend ${friend.name}`}
+        </button>
+      </div>
     );
   }
 

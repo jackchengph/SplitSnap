@@ -127,7 +127,6 @@ function AuthenticatedSplitSnapApp({
         friends={state.friends}
         connectedFriendIds={state.connectedFriendIds}
         selectedDinnerFriendIds={state.selectedDinnerFriendIds}
-        onRemoveFriend={state.disconnectFriend}
         onToggleDinnerFriend={state.toggleDinnerFriend}
         onNext={() => {
           setFlowStep("source");
@@ -209,7 +208,7 @@ function AuthenticatedSplitSnapApp({
         onDeclineFriend={state.declineFriend}
         onAddDinnerFriend={state.addDinnerFriend}
         onRemoveDinnerFriend={state.removeDinnerFriend}
-        onRemove={state.disconnectFriend}
+        onUnfriend={state.disconnectFriend}
         onNext={() => setFlowStep("group")}
         onHome={goHome}
       />

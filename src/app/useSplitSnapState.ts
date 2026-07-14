@@ -474,10 +474,32 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     setActiveParticipantId((current) => (current === friendId ? "" : current));
   }
 
-  function disconnectFriend(friendId: string) {
+  function clearFriendFromDraft(friendId: string) {
     setConnectedFriendIds((current) => current.filter((id) => id !== friendId));
     setSelectedDinnerFriendIds((current) => current.filter((id) => id !== friendId));
     setActiveParticipantId((current) => (current === friendId ? "" : current));
+    setFriendEntries((current) =>
+      current.filter((entry) => entry.profile.id !== friendId)
+    );
+  }
+
+  async function disconnectFriend(friendshipId: string, friendId: string) {
+    if (!isCloudMode) {
+      clearFriendFromDraft(friendId);
+      return;
+    }
+
+    const repository = friendRepositoryRef.current ?? createFriendRepository(payerId);
+    try {
+      await repository.removeFriend(friendshipId);
+      clearFriendFromDraft(friendId);
+    } catch (error) {
+      setParseWarnings((current) => [
+        ...current.filter((warning) => !warning.startsWith("Unfriend failed:")),
+        `Unfriend failed: ${error instanceof Error ? error.message : "Friend was not removed."}`
+      ]);
+      throw error;
+    }
   }
 
   function toggleDinnerFriend(friendId: string) {
