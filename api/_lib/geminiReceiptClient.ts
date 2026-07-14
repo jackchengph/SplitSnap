@@ -6,7 +6,12 @@ import {
   normalizeGeminiReceipt
 } from "./receiptExtraction.js";
 
-const model = "gemini-2.5-flash";
+const defaultModels = [
+  "gemini-3.5-flash",
+  "gemini-flash-latest",
+  "gemini-3.1-flash-lite",
+  "gemini-2.0-flash"
+];
 
 const receiptPrompt = `Read this restaurant receipt and return every visible row in printed order.
 Use kind=item only for purchased menu items. Stop assignable items at the first subtotal row.
@@ -94,6 +99,17 @@ function providerStatus(error: unknown): number | undefined {
   return typeof error.status === "number" ? error.status : undefined;
 }
 
+function modelCandidates(): string[] {
+  const configuredModel = process.env.GEMINI_MODEL?.trim();
+  const models = configuredModel ? [configuredModel, ...defaultModels] : defaultModels;
+  return [...new Set(models)];
+}
+
+function shouldTryNextModel(error: unknown): boolean {
+  const status = providerStatus(error);
+  return status === 404;
+}
+
 function createAdapter(apiKey: string): GeminiAdapter {
   const client = new GoogleGenAI({ apiKey });
   return {
@@ -127,40 +143,52 @@ export async function extractReceiptWithGemini(
 
   const adapter = options.adapter ?? createAdapter(apiKey);
   const timeoutMs = options.timeoutMs ?? 25_000;
-  try {
-    const response = await withTimeout(
-      adapter.generateContent({
-        model,
-        contents: [
-          { inlineData: { mimeType: input.mimeType, data: input.base64Data } },
-          { text: receiptPrompt }
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseJsonSchema: receiptSchema
-        }
-      }),
-      timeoutMs
-    );
+  const models = modelCandidates();
+  let lastError: unknown;
 
-    if (!response.text) throw new GeminiProviderError();
-    let payload: unknown;
+  for (const model of models) {
     try {
-      payload = JSON.parse(response.text);
-    } catch {
-      throw new GeminiProviderError();
+      const response = await withTimeout(
+        adapter.generateContent({
+          model,
+          contents: [
+            { inlineData: { mimeType: input.mimeType, data: input.base64Data } },
+            { text: receiptPrompt }
+          ],
+          config: {
+            responseMimeType: "application/json",
+            responseJsonSchema: receiptSchema
+          }
+        }),
+        timeoutMs
+      );
+
+      if (!response.text) throw new GeminiProviderError();
+      let payload: unknown;
+      try {
+        payload = JSON.parse(response.text);
+      } catch {
+        throw new GeminiProviderError();
+      }
+      return normalizeGeminiReceipt(payload);
+    } catch (error) {
+      if (
+        error instanceof GeminiConfigurationError ||
+        error instanceof GeminiProviderError ||
+        error instanceof InvalidGeminiReceiptError ||
+        error instanceof UnusableGeminiReceiptError
+      ) {
+        throw error;
+      }
+      if (providerStatus(error) === 429) throw new GeminiRateLimitError();
+      lastError = error;
+      if (shouldTryNextModel(error) && model !== models[models.length - 1]) {
+        continue;
+      }
+      break;
     }
-    return normalizeGeminiReceipt(payload);
-  } catch (error) {
-    if (
-      error instanceof GeminiConfigurationError ||
-      error instanceof GeminiProviderError ||
-      error instanceof InvalidGeminiReceiptError ||
-      error instanceof UnusableGeminiReceiptError
-    ) {
-      throw error;
-    }
-    if (providerStatus(error) === 429) throw new GeminiRateLimitError();
-    throw new GeminiProviderError();
   }
+
+  if (providerStatus(lastError) === 429) throw new GeminiRateLimitError();
+  throw new GeminiProviderError();
 }

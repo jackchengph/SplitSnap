@@ -41,7 +41,7 @@ describe("extractReceiptWithGemini", () => {
     expect(adapter.generateContent).toHaveBeenCalledOnce();
     const request = vi.mocked(adapter.generateContent).mock.calls[0][0];
     expect(request).toMatchObject({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: [
         { inlineData: { mimeType: "image/jpeg", data: "receipt-base64" } },
         { text: expect.stringMatching(/stop assignable items at the first subtotal/i) }
@@ -79,6 +79,29 @@ describe("extractReceiptWithGemini", () => {
       name: "GeminiRateLimitError",
       message: expect.not.stringMatching(/secret|receipt-base64|server-secret/)
     }));
+  });
+
+  it("tries the next Gemini model when the primary model is unavailable", async () => {
+    const adapter: GeminiAdapter = {
+      generateContent: vi.fn(async (request) => {
+        if (request.model === "gemini-3.5-flash") {
+          throw Object.assign(new Error("model unavailable"), { status: 404 });
+        }
+
+        return { text: JSON.stringify(validModelPayload()) };
+      })
+    };
+
+    const result = await extractReceiptWithGemini(
+      { mimeType: "image/jpeg", base64Data: "receipt-base64" },
+      { apiKey: "server-secret", adapter }
+    );
+
+    expect(result).toMatchObject({ merchantName: "ATSU-YA FOOD INC.", total: 570 });
+    expect(vi.mocked(adapter.generateContent).mock.calls.map(([request]) => request.model)).toEqual([
+      "gemini-3.5-flash",
+      "gemini-flash-latest"
+    ]);
   });
 
   it("sanitizes generic provider errors", async () => {
