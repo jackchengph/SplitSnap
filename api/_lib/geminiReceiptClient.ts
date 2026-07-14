@@ -6,7 +6,7 @@ import {
   normalizeGeminiReceipt
 } from "./receiptExtraction.js";
 
-const model = "gemini-flash-latest";
+const model = "gemini-2.5-flash";
 
 const receiptPrompt = `Read this restaurant receipt and return every visible row in printed order.
 Use kind=item only for purchased menu items. Stop assignable items at the first subtotal row.

@@ -41,7 +41,7 @@ describe("extractReceiptWithGemini", () => {
     expect(adapter.generateContent).toHaveBeenCalledOnce();
     const request = vi.mocked(adapter.generateContent).mock.calls[0][0];
     expect(request).toMatchObject({
-      model: "gemini-flash-latest",
+      model: "gemini-2.5-flash",
       contents: [
         { inlineData: { mimeType: "image/jpeg", data: "receipt-base64" } },
         { text: expect.stringMatching(/stop assignable items at the first subtotal/i) }
