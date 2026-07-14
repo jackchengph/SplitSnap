@@ -153,6 +153,27 @@ describe("extractReceiptWithGemini", () => {
     await promise;
   });
 
+  it("allows real receipt images up to 45 seconds by default", async () => {
+    vi.useFakeTimers();
+    const adapter: GeminiAdapter = {
+      generateContent: vi.fn(() => new Promise<{ text?: string }>(() => undefined))
+    };
+    let settled = false;
+    const extraction = extractReceiptWithGemini(
+      { mimeType: "image/jpeg", base64Data: "private-receipt-base64" },
+      { apiKey: "server-secret", adapter }
+    ).catch(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    await extraction;
+    expect(settled).toBe(true);
+  });
+
   it("exports distinct typed provider failures", () => {
     expect(new GeminiRateLimitError()).toBeInstanceOf(GeminiProviderError);
   });

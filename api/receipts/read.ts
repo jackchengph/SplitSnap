@@ -10,6 +10,7 @@ import {
 } from "../_lib/geminiReceiptClient.js";
 import type { NormalizedReceiptExtraction } from "../../src/domain/geminiReceiptTypes.js";
 import type { Receipt, ReceiptItem } from "../../src/domain/types.js";
+import sharp from "sharp";
 
 interface ReadReceiptBody {
   imageDataUrl?: unknown;
@@ -62,6 +63,20 @@ async function convertHeicBufferToJpeg(buffer: Buffer): Promise<Buffer> {
   return Buffer.from(converted.buffer, converted.byteOffset, converted.byteLength);
 }
 
+async function normalizeReceiptImage(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .rotate()
+    .resize({
+      width: 1800,
+      height: 1800,
+      fit: "inside",
+      withoutEnlargement: true
+    })
+    .flatten({ background: "#ffffff" })
+    .jpeg({ quality: 76, mozjpeg: true })
+    .toBuffer();
+}
+
 async function readImage(value: string): Promise<{
   mimeType: "image/jpeg" | "image/png" | "image/webp";
   base64Data: string;
@@ -70,20 +85,21 @@ async function readImage(value: string): Promise<{
   if (!match || match[2].length % 4 !== 0) throw new InvalidReceiptImage();
   const mimeType = match[1].toLowerCase();
   const buffer = Buffer.from(match[2], "base64");
+  const heif = heifMimeTypes.has(mimeType) || isHeifBuffer(buffer);
+  if (!heif && !allowedGeminiMimeTypes.has(mimeType)) {
+    throw new InvalidReceiptImage();
+  }
 
-  if (heifMimeTypes.has(mimeType) || isHeifBuffer(buffer)) {
-    const jpegBuffer = await convertHeicBufferToJpeg(buffer);
+  try {
+    const sourceBuffer = heif ? await convertHeicBufferToJpeg(buffer) : buffer;
+    const jpegBuffer = await normalizeReceiptImage(sourceBuffer);
     return {
       mimeType: "image/jpeg",
       base64Data: jpegBuffer.toString("base64")
     };
+  } catch {
+    throw new InvalidReceiptImage();
   }
-
-  if (!allowedGeminiMimeTypes.has(mimeType)) throw new InvalidReceiptImage();
-  return {
-    mimeType: mimeType as "image/jpeg" | "image/png" | "image/webp",
-    base64Data: match[2]
-  };
 }
 
 function slugify(value: string, index: number): string {

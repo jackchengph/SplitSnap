@@ -142,7 +142,7 @@ export async function extractReceiptWithGemini(
   if (!apiKey.trim()) throw new GeminiConfigurationError();
 
   const adapter = options.adapter ?? createAdapter(apiKey);
-  const timeoutMs = options.timeoutMs ?? 25_000;
+  const timeoutMs = options.timeoutMs ?? 45_000;
   const models = modelCandidates();
   let lastError: unknown;
 

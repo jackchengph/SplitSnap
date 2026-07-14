@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GeminiConfigurationError, extractReceiptWithGemini } from "../_lib/geminiReceiptClient";
 import { requireUserId } from "../_lib/authenticatedRequest";
+import sharp from "sharp";
 import handler from "./read";
 
 vi.mock("../_lib/authenticatedRequest", () => ({
@@ -14,6 +15,22 @@ vi.mock("../_lib/geminiReceiptClient", async (importOriginal) => {
 
 vi.mock("heic-convert", () => ({
   default: vi.fn(async () => Buffer.from("jpeg-from-heic"))
+}));
+
+const imagePipeline = {
+  rotate: vi.fn(),
+  resize: vi.fn(),
+  flatten: vi.fn(),
+  jpeg: vi.fn(),
+  toBuffer: vi.fn(async () => Buffer.from("normalized-receipt-jpeg"))
+};
+imagePipeline.rotate.mockReturnValue(imagePipeline);
+imagePipeline.resize.mockReturnValue(imagePipeline);
+imagePipeline.flatten.mockReturnValue(imagePipeline);
+imagePipeline.jpeg.mockReturnValue(imagePipeline);
+
+vi.mock("sharp", () => ({
+  default: vi.fn(() => imagePipeline)
 }));
 
 function createResponseRecorder() {
@@ -82,9 +99,17 @@ describe("POST /api/receipts/read", () => {
       payload: { receipt: { items: Array<{ name: string; quantity: number; price: number }>; total: number; tax: number } };
     };
     expect(statusCode).toBe(200);
+    expect(sharp).toHaveBeenCalledWith(Buffer.from("abc"));
+    expect(imagePipeline.rotate).toHaveBeenCalledOnce();
+    expect(imagePipeline.resize).toHaveBeenCalledWith({
+      width: 1800,
+      height: 1800,
+      fit: "inside",
+      withoutEnlargement: true
+    });
     expect(extractReceiptWithGemini).toHaveBeenCalledWith({
       mimeType: "image/jpeg",
-      base64Data: "YWJj"
+      base64Data: Buffer.from("normalized-receipt-jpeg").toString("base64")
     });
     expect(payload.receipt.items).toEqual([
       expect.objectContaining({ name: "PENNE PESTO", quantity: 1, price: 205 })
@@ -132,7 +157,7 @@ describe("POST /api/receipts/read", () => {
     expect(statusCode).toBe(200);
     expect(extractReceiptWithGemini).toHaveBeenCalledWith({
       mimeType: "image/jpeg",
-      base64Data: Buffer.from("jpeg-from-heic").toString("base64")
+      base64Data: Buffer.from("normalized-receipt-jpeg").toString("base64")
     });
     expect(payload.receipt.items).toEqual([
       expect.objectContaining({ name: "Midnight Dream Whole", quantity: 1, price: 1065 }),
