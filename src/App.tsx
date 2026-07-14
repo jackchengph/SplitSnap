@@ -189,11 +189,7 @@ function AuthenticatedSplitSnapApp({
         splitResult={activeSplit}
         paymentProof={state.paymentProofs[state.activeParticipantId]}
         onSubmitProof={state.submitPaymentProof}
-        onSettle={(participantId) => {
-          state.markPaid(participantId);
-          setFlowStep("none");
-          setCurrentPage("activity");
-        }}
+        onNotifyPayer={state.notifyPayerForProof}
         onBack={() => {
           setFlowStep("none");
           setCurrentPage("activity");

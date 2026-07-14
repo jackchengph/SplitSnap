@@ -135,6 +135,7 @@ export interface PaymentProof {
   id: string;
   participantId: string;
   fileName: string;
+  imageUrl?: string;
   uploadedAt: string;
   extracted: ExtractedPaymentDetails;
   validation: PaymentProofValidation;

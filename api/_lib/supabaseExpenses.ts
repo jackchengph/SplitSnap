@@ -57,6 +57,7 @@ function readProofMap(rows: JsonRecord[]): Record<string, PaymentProof> {
         id: readString(row.id),
         participantId: readString(row.participant_id),
         fileName: readString(row.file_name),
+        imageUrl: readString(row.storage_path) || undefined,
         uploadedAt: readString(row.uploaded_at),
         extracted: (row.extracted || {}) as PaymentProof["extracted"],
         validation: (row.validation || { valid: false, reasons: [] }) as PaymentProof["validation"]
@@ -221,7 +222,7 @@ export async function upsertSupabaseExpense(
     dinner_id: expense.id,
     participant_id: proof.participantId,
     file_name: proof.fileName,
-    storage_path: null,
+    storage_path: proof.imageUrl || null,
     uploaded_at: proof.uploadedAt,
     extracted: proof.extracted,
     validation: proof.validation,

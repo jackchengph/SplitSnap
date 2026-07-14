@@ -248,11 +248,11 @@ describe("App", () => {
       new File(["proof"], "gcash-valid-nico.jpg", { type: "image/jpeg" })
     );
 
-    expect(screen.getByText(/Payment verified/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Payment verified/i)).toBeInTheDocument();
     expect(screen.getByText(/Status: unpaid/i)).toBeInTheDocument();
   });
 
-  it("settles a participant balance and removes it from Activity", async () => {
+  it("does not let a participant settle their own balance from Activity", async () => {
     const user = userEvent.setup();
     render(<App />);
     await enterPreview(user);
@@ -261,10 +261,8 @@ describe("App", () => {
     );
     await user.click(screen.getByRole("button", { name: /Nico/i }));
 
-    await user.click(screen.getByRole("button", { name: "Settled" }));
-
-    expect(screen.getByRole("heading", { name: /Dinners in motion/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Nico/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Your SplitSnap balance/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Settled" })).not.toBeInTheDocument();
   });
 
   it("shows a retryable profile error instead of loading forever", async () => {

@@ -820,6 +820,15 @@ ul {
   padding: 12px;
 }
 
+.proof-image {
+  border: 1px solid #e3ece8;
+  border-radius: 8px;
+  display: block;
+  max-height: 260px;
+  object-fit: contain;
+  width: 100%;
+}
+
 .proof-details {
   display: grid;
   gap: 8px;

@@ -8,8 +8,8 @@ interface ParticipantDashboardProps {
   payerName: string;
   splitResult: SplitResult | undefined;
   paymentProof: PaymentProof | undefined;
-  onSubmitProof: (participantId: string, fileName: string) => void;
-  onSettle: (participantId: string) => void;
+  onSubmitProof: (participantId: string, fileName: string, imageUrl?: string) => void;
+  onNotifyPayer: (participantId: string) => void;
   onBack: () => void;
 }
 
@@ -21,7 +21,7 @@ export function ParticipantDashboard({
   splitResult,
   paymentProof,
   onSubmitProof,
-  onSettle,
+  onNotifyPayer,
   onBack
 }: ParticipantDashboardProps) {
   const participant = friends.find((friend) => friend.id === activeParticipantId);
@@ -48,15 +48,6 @@ export function ParticipantDashboard({
             <span>Amount owed to {payerName}</span>
             <strong>{formatCurrency(splitResult?.totalOwed ?? 0)}</strong>
             <p>Status: {splitResult?.status ?? "paid"}</p>
-            {splitResult ? (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => onSettle(activeParticipantId)}
-              >
-                Settled
-              </button>
-            ) : null}
           </div>
         </section>
 
@@ -100,7 +91,15 @@ export function ParticipantDashboard({
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) {
-                  onSubmitProof(activeParticipantId, file.name);
+                  const reader = new FileReader();
+                  reader.addEventListener("load", () => {
+                    onSubmitProof(
+                      activeParticipantId,
+                      file.name,
+                      typeof reader.result === "string" ? reader.result : ""
+                    );
+                  });
+                  reader.readAsDataURL(file);
                 }
               }}
             />
@@ -113,6 +112,13 @@ export function ParticipantDashboard({
               <strong>
                 {paymentProof.validation.valid ? "Payment verified" : "Payment needs review"}
               </strong>
+              {paymentProof.imageUrl ? (
+                <img
+                  className="proof-image"
+                  src={paymentProof.imageUrl}
+                  alt="Uploaded payment proof"
+                />
+              ) : null}
               <dl className="proof-details">
                 <div>
                   <dt>Amount</dt>
@@ -138,6 +144,13 @@ export function ParticipantDashboard({
                   ))}
                 </ul>
               ) : null}
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onNotifyPayer(activeParticipantId)}
+              >
+                Verify payment
+              </button>
             </div>
           ) : null}
         </section>

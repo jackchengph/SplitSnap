@@ -337,16 +337,30 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     status: PaymentStatus
   ) {
     setCloudExpenses((current) =>
-      current.map((expense) =>
-        expense.id === expenseIdToUpdate
-          ? {
-              ...expense,
-              statuses: { ...expense.statuses, [participantId]: status },
-              updatedAt: new Date().toISOString()
-            }
-          : expense
-      )
+      current.flatMap((expense) => {
+        if (expense.id !== expenseIdToUpdate) {
+          return [expense];
+        }
+
+        const nextExpense = {
+          ...expense,
+          statuses: { ...expense.statuses, [participantId]: status },
+          updatedAt: new Date().toISOString()
+        };
+        const owingParticipantIds = nextExpense.participantIds.filter(
+          (id) => id !== nextExpense.payerId
+        );
+        const fullySettled =
+          owingParticipantIds.length > 0 &&
+          owingParticipantIds.every((id) => nextExpense.statuses[id] === "paid");
+
+        return fullySettled ? [] : [nextExpense];
+      })
     );
+  }
+
+  function removeLocalCloudExpense(expenseIdToRemove: string) {
+    setCloudExpenses((current) => current.filter((expense) => expense.id !== expenseIdToRemove));
   }
 
   function updateLocalCloudExpenseProof(expenseIdToUpdate: string, proof: PaymentProof) {
@@ -711,36 +725,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     }
   }
 
-  function markPaid(participantId: string) {
-    const result = split.results.find((item) => item.participantId === participantId);
-    if (!result) {
-      return;
-    }
-
-    setStatuses((current) => ({ ...current, [participantId]: "paid" }));
-    updateLocalCloudExpenseStatus(receipt.id, participantId, "paid");
-    if (isCloudMode) {
-      void updateExpenseStatus({
-        expenseId: receipt.id,
-        participantId,
-        status: "paid"
-      }).catch(() => undefined);
-    }
-    setFriends((current) =>
-      current.map((friend) =>
-        friend.id === participantId
-          ? updateReliabilityAfterPayment(friend, {
-              expenseId,
-              paidAtDaysFromDue: 0,
-              remindersSent: statuses[participantId] === "reminded" ? 1 : 0,
-              amountPaid: result.totalOwed
-            })
-          : friend
-      )
-    );
-  }
-
-  function submitPaymentProof(participantId: string, fileName: string) {
+  function submitPaymentProof(participantId: string, fileName: string, imageUrl = "") {
     const result = split.results.find((item) => item.participantId === participantId);
     const friend = friends.find((item) => item.id === participantId);
     if (!result || !friend) {
@@ -765,6 +750,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
       id: `${participantId}-${Date.now()}`,
       participantId,
       fileName,
+      imageUrl: imageUrl || undefined,
       uploadedAt: new Date().toISOString(),
       extracted,
       validation
@@ -772,12 +758,60 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
 
     setPaymentProofs((current) => ({ ...current, [participantId]: proof }));
     updateLocalCloudExpenseProof(receipt.id, proof);
-    if (isCloudMode) {
-      void savePaymentProof({
-        expenseId: receipt.id,
-        proof
-      }).catch(() => undefined);
+  }
+
+  function notifyPayerForProof(participantId: string) {
+    const proof = paymentProofs[participantId];
+    if (!proof || !isCloudMode) {
+      return;
     }
+
+    void savePaymentProof({
+      expenseId: receipt.id,
+      proof
+    }).catch((error) => {
+      setParseWarnings((current) => [
+        ...current.filter((warning) => !warning.startsWith("Payment proof failed:")),
+        `Payment proof failed: ${
+          error instanceof Error ? error.message : "Payer was not notified."
+        }`
+      ]);
+    });
+  }
+
+  function markPaid(participantId: string) {
+    const result = split.results.find((item) => item.participantId === participantId);
+    if (!result) {
+      return;
+    }
+
+    setStatuses((current) => ({ ...current, [participantId]: "paid" }));
+    updateLocalCloudExpenseStatus(receipt.id, participantId, "paid");
+    if (isCloudMode) {
+      void updateExpenseStatus({
+        expenseId: receipt.id,
+        participantId,
+        status: "paid"
+      })
+        .then((statusResult) => {
+          if (statusResult.deleted) {
+            removeLocalCloudExpense(receipt.id);
+          }
+        })
+        .catch(() => undefined);
+    }
+    setFriends((current) =>
+      current.map((friend) =>
+        friend.id === participantId
+          ? updateReliabilityAfterPayment(friend, {
+              expenseId,
+              paidAtDaysFromDue: 0,
+              remindersSent: statuses[participantId] === "reminded" ? 1 : 0,
+              amountPaid: result.totalOwed
+            })
+          : friend
+      )
+    );
   }
 
   function openCloudExpense(expenseIdToOpen: string, participantId?: string) {
@@ -808,7 +842,12 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
       parseWarnings: ["Uploaded receipt image is ready. Tap Read receipt to let Gemini fill the items."],
       items: current.items.map((item) =>
         item.confidence < 0.85
-          ? { ...item, parseSource: "manual", needsReview: true, confidence: Math.min(item.confidence, 0.62) }
+          ? {
+              ...item,
+              parseSource: "manual",
+              needsReview: true,
+              confidence: Math.min(item.confidence, 0.62)
+            }
           : item
       )
     }));
@@ -860,6 +899,7 @@ export function useSplitSnapState(options: SplitSnapStateOptions = {}) {
     markPaid,
     saveDinner,
     submitPaymentProof,
+    notifyPayerForProof,
     openCloudExpense,
     simulateUpload
   };

@@ -136,7 +136,11 @@ export function SplitReviewPage({
             onReminder={onReminder}
             onMarkPaid={onMarkPaid}
           />
-          <PaymentProofStatus friends={friends} paymentProofs={paymentProofs} />
+          <PaymentProofStatus
+            friends={friends}
+            paymentProofs={paymentProofs}
+            onSettleProof={onMarkPaid}
+          />
           <NotificationCenter friends={friends} notifications={notifications} />
         </aside>
       </div>

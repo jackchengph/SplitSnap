@@ -65,7 +65,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         dinner_id: expenseId,
         participant_id: callerId,
         file_name: readString(proof.fileName),
-        storage_path: null,
+        storage_path: readString(proof.imageUrl),
         uploaded_at: readString(proof.uploadedAt) || new Date().toISOString(),
         extracted: proof.extracted || {},
         validation: proof.validation || { valid: false, reasons: [] },

@@ -257,8 +257,8 @@ export function subscribeToUserExpenses(
 export async function savePaymentProof(input: {
   expenseId: string;
   proof: PaymentProof;
-}): Promise<void> {
-  await cloudFetch("/api/payment-proofs/upsert", {
+}): Promise<{ saved: boolean; notified: number; notificationFailed: boolean }> {
+  return cloudFetch("/api/payment-proofs/upsert", {
     method: "POST",
     body: JSON.stringify(input)
   });
@@ -268,8 +268,13 @@ export async function updateExpenseStatus(input: {
   expenseId: string;
   participantId: string;
   status: PaymentStatus;
-}): Promise<void> {
-  await cloudFetch("/api/expenses/status", {
+}): Promise<{
+  saved: boolean;
+  deleted: boolean;
+  notified: number;
+  notificationFailed: boolean;
+}> {
+  return cloudFetch("/api/expenses/status", {
     method: "POST",
     body: JSON.stringify(input)
   });

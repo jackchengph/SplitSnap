@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSplitSnapState } from "./useSplitSnapState";
-import { saveExpense, updateExpenseStatus } from "../services/cloudWorkspace";
+import { saveExpense, savePaymentProof, updateExpenseStatus } from "../services/cloudWorkspace";
 import { sendPushReminder } from "../services/notificationClient";
 import { createFriendRepository } from "../services/friendRepository";
 
@@ -19,6 +19,7 @@ vi.mock("../services/cloudWorkspace", () => ({
   })),
   connectWithUser: vi.fn().mockResolvedValue(undefined),
   saveExpense: vi.fn().mockResolvedValue(undefined),
+  savePaymentProof: vi.fn().mockResolvedValue({ saved: true, notified: 1, notificationFailed: false }),
   updateExpenseStatus: vi.fn().mockResolvedValue(undefined),
   subscribeToUserExpenses: vi.fn((_currentUserId, onValue) => {
     onValue([]);
@@ -368,7 +369,64 @@ describe("useSplitSnapState cloud mode", () => {
       result.current.markPaid("friend-uid");
     });
 
-    expect(result.current.cloudExpenses[0].statuses["friend-uid"]).toBe("paid");
+    expect(result.current.cloudExpenses).toEqual([]);
     expect(result.current.split.results).toEqual([]);
+  });
+
+  it("notifies the payer with a payment proof from a manual dinner", async () => {
+    mockFriendRepository([connectedEntry()]);
+    const currentUser = {
+      id: "current-uid",
+      displayName: "Maya Cruz",
+      firstName: "Maya",
+      email: "maya@example.com",
+      photoURL: null
+    };
+
+    const { result } = renderHook(() =>
+      useSplitSnapState({
+        cloudMode: true,
+        currentUser
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.friends.map((friend) => friend.id)).toContain("friend-uid");
+    });
+
+    act(() => {
+      result.current.addDinnerFriend("friend-uid");
+    });
+
+    act(() => {
+      result.current.useManualReceipt();
+    });
+
+    act(() => {
+      result.current.updateItemPrice(result.current.receipt.items[0].id, 600);
+    });
+
+    await act(async () => {
+      await result.current.saveDinner();
+    });
+
+    act(() => {
+      result.current.submitPaymentProof("friend-uid", "gcash-valid-friend.jpg", "data:image/jpeg;base64,proof");
+    });
+
+    act(() => {
+      result.current.notifyPayerForProof("friend-uid");
+    });
+
+    await waitFor(() => {
+      expect(savePaymentProof).toHaveBeenCalledWith({
+        expenseId: expect.any(String),
+        proof: expect.objectContaining({
+          participantId: "friend-uid",
+          fileName: "gcash-valid-friend.jpg",
+          imageUrl: "data:image/jpeg;base64,proof"
+        })
+      });
+    });
   });
 });

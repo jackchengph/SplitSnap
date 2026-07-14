@@ -4,9 +4,14 @@ import type { Friend, PaymentProof } from "../domain/types";
 interface PaymentProofStatusProps {
   friends: Friend[];
   paymentProofs: Record<string, PaymentProof>;
+  onSettleProof?: (participantId: string) => void;
 }
 
-export function PaymentProofStatus({ friends, paymentProofs }: PaymentProofStatusProps) {
+export function PaymentProofStatus({
+  friends,
+  paymentProofs,
+  onSettleProof
+}: PaymentProofStatusProps) {
   const proofs = Object.values(paymentProofs);
   const friendById = new Map(friends.map((friend) => [friend.id, friend]));
 
@@ -31,6 +36,9 @@ export function PaymentProofStatus({ friends, paymentProofs }: PaymentProofStatu
                   {proof.validation.valid ? "verified" : "needs review"}
                 </span>
               </div>
+              {proof.imageUrl ? (
+                <img className="proof-image" src={proof.imageUrl} alt="Uploaded payment proof" />
+              ) : null}
               <dl className="proof-details">
                 <div>
                   <dt>Amount</dt>
@@ -51,6 +59,15 @@ export function PaymentProofStatus({ friends, paymentProofs }: PaymentProofStatu
                     <li key={reason}>{reason}</li>
                   ))}
                 </ul>
+              ) : null}
+              {onSettleProof ? (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => onSettleProof(proof.participantId)}
+                >
+                  Settled
+                </button>
               ) : null}
             </article>
           ))}
